@@ -2,6 +2,8 @@
 
 A real-time, ML-powered stock market battle game where you trade against 5 AI agents with different strategies.
 
+Live - https://market.akash-codes.space
+
 ## 🎮 What It Is
 
 - **Interactive trading battle** — you vs 5 AI agents in real-time
