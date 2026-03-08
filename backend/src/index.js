@@ -12,36 +12,59 @@ const { getSession, createSession, TICK_INTERVAL } = require('./services/gameSes
 
 const app    = express();
 const server = http.createServer(app);
-const wss    = new WebSocket.Server({ server, path: '/ws' });
 
-app.use(cors({ origin: (origin, cb) => cb(null, true), credentials: true }));
+const wss = new WebSocket.Server({ noServer: true });
+
+app.use(cors({ origin: '*', credentials: false }));
 app.use(express.json());
+
+app.get('/health',     (_req, res) => res.json({ status: 'ok', ts: Date.now() }));
+app.get('/api/health', (_req, res) => res.json({ status: 'ok', ts: Date.now() }));
+
 app.use('/api', gameRoutes);
+
+server.on('upgrade', (request, socket, head) => {
+  const pathname = request.url;
+  console.log(`[UPGRADE] request.url = "${pathname}"`);
+
+  if (pathname === '/ws' || pathname === '/' || pathname === '') {
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.emit('connection', ws, request);
+    });
+  } else {
+    console.log(`[UPGRADE] Rejecting unknown path: ${pathname}`);
+    socket.destroy();
+  }
+});
 
 const sessionClients = new Map();
 const sessionTimers  = new Map();
 const wsSession      = new Map();
 
 wss.on('connection', (ws, req) => {
-  console.log(`[WS] Client connected from ${req.socket.remoteAddress}`);
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  console.log(`[WS] Client connected from ${ip}`);
 
   ws.on('message', raw => {
     let msg;
-    try { msg = JSON.parse(raw); } catch { return; }
+    try { msg = JSON.parse(raw); } catch (e) {
+      console.error('[WS] Bad JSON:', e.message);
+      return;
+    }
 
     if (msg.type === 'JOIN') {
-      const { sessionId, selectedAgents, startingCash } = msg;
-      let session = getSession(sessionId);
-      if (!session && selectedAgents?.length) {
-        session = createSession({ selectedAgents, startingCash: startingCash || 10000 });
-      }
-      if (!session) {
-        ws.send(JSON.stringify({ type: 'ERROR', message: 'Session not found' }));
-        return;
-      }
+      const { selectedAgents, startingCash } = msg;
+      console.log(`[JOIN] agents=${JSON.stringify(selectedAgents)} cash=${startingCash}`);
+
+      const session = createSession({
+        selectedAgents: selectedAgents?.length ? selectedAgents : undefined,
+        startingCash:   startingCash || 10000,
+      });
+
       wsSession.set(ws, session.id);
       if (!sessionClients.has(session.id)) sessionClients.set(session.id, new Set());
       sessionClients.get(session.id).add(ws);
+
       ws.send(JSON.stringify({ type: 'STATE', payload: session.fullState() }));
       startLoop(session.id);
     }
@@ -72,6 +95,7 @@ wss.on('connection', (ws, req) => {
   });
 
   ws.on('close', () => {
+    console.log('[WS] Client disconnected');
     const sid = wsSession.get(ws);
     if (sid) {
       const clients = sessionClients.get(sid);
@@ -88,32 +112,39 @@ wss.on('connection', (ws, req) => {
       }
     }
     wsSession.delete(ws);
-    console.log('[WS] Client disconnected');
   });
 
-  ws.on('error', err => console.error('[WS] Error:', err.message));
+  ws.on('error', err => console.error('[WS] Socket error:', err.message));
 });
 
 function startLoop(sid) {
   if (sessionTimers.has(sid)) return;
+  console.log(`[LOOP] Starting for session ${sid}`);
+
   const timer = setInterval(() => {
     const session = getSession(sid);
     if (!session) { stopLoop(sid); return; }
+
     if (session.status === 'ended') {
       broadcast(sid, { type: 'GAME_OVER', payload: session.fullState() });
       stopLoop(sid);
       return;
     }
+
     const update = session.advanceTick();
     if (update) broadcast(sid, { type: 'TICK', payload: update });
   }, TICK_INTERVAL);
+
   sessionTimers.set(sid, timer);
-  console.log(`[LOOP] Started for session ${sid}`);
 }
 
 function stopLoop(sid) {
   const timer = sessionTimers.get(sid);
-  if (timer) { clearInterval(timer); sessionTimers.delete(sid); }
+  if (timer) {
+    clearInterval(timer);
+    sessionTimers.delete(sid);
+    console.log(`[LOOP] Stopped for session ${sid}`);
+  }
 }
 
 function broadcast(sid, msg) {
@@ -127,7 +158,7 @@ function broadcast(sid, msg) {
 
 async function connectDB() {
   const uri = process.env.MONGODB_URI;
-  if (!uri) { console.warn('[DB] No MONGODB_URI'); return; }
+  if (!uri) { console.warn('[DB] No MONGODB_URI — leaderboard disabled'); return; }
   try {
     await mongoose.connect(uri);
     console.log('[DB] MongoDB connected ✅');
@@ -140,7 +171,12 @@ connectDB();
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`\n🚀 AI Market Arena backend on port ${PORT}`);
+  console.log(`   REST  → /api/health`);
+  console.log(`   WS    → /ws`);
+  console.log(`   ENV   → ${process.env.NODE_ENV || 'development'}\n`);
 });
 
-process.on('SIGTERM', () => server.close(() => process.exit(0)));
+process.on('SIGTERM', () => {
+  server.close(() => process.exit(0));
+});
