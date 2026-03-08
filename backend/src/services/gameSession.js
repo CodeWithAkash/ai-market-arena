@@ -1,229 +1,185 @@
+'use strict';
 const { v4: uuidv4 } = require('uuid');
-const { MarketSimulator } = require('../services/marketSimulator');
+const { MarketSimulator } = require('./marketSimulator');
 const { createAgents } = require('../agents/tradingAgents');
 
+const DEFAULT_AGENTS  = ['MomentumBot', 'ValueBot', 'RiskBot', 'RandomBot', 'RLBot'];
+const MAX_TICKS       = 200;
+const TICK_INTERVAL   = 1500; // ms
+
 class GameSession {
-  constructor(selectedAgentNames, startingCash = 10000, speed = 2000) {
-    this.id = uuidv4();
+  constructor({ selectedAgents = DEFAULT_AGENTS, startingCash = 10000 } = {}) {
+    this.id           = uuidv4();
     this.startingCash = startingCash;
-    this.speed = speed;
-    this.status = 'waiting'; // waiting, active, ended
-    this.createdAt = Date.now();
-    this.tick = 0;
-    this.maxTicks = 200;
-    
-    // Market
-    this.market = new MarketSimulator();
-    
-    // Player
+    this.status       = 'active';
+    this.tick         = 0;
+    this.maxTicks     = MAX_TICKS;
+    this.createdAt    = Date.now();
+
+    this.market    = new MarketSimulator();
+    this.agents    = createAgents(selectedAgents, startingCash);
+    this.eventLog  = [];
+    this.tradeFeed = [];
+
     this.player = {
-      cash: startingCash,
-      portfolio: {},
+      cash:         startingCash,
+      portfolio:    {},
       tradeHistory: [],
-      totalValue: startingCash,
+      totalValue:   startingCash,
     };
-    
-    // AI Agents (filter by selected)
-    const allAgents = createAgents();
-    this.agents = allAgents.filter(a => selectedAgentNames.includes(a.name));
-    if (this.agents.length === 0) this.agents = allAgents; // fallback
-    
-    // Events log
-    this.eventLog = [];
-    this.recentTrades = [];
-    
-    // Timer
-    this.intervalId = null;
   }
 
-  getLeaderboard() {
-    const marketData = this.market.getMarketData();
-    
-    const entries = [
-      {
-        name: 'YOU',
-        color: '#ffffff',
-        personality: 'Human Trader',
-        value: this.getPlayerValue(marketData),
-        change: this.getPlayerValue(marketData) - this.startingCash,
-        changePercent: ((this.getPlayerValue(marketData) - this.startingCash) / this.startingCash) * 100,
-        isPlayer: true,
-      },
-      ...this.agents.map(agent => {
-        const value = agent.getPortfolioValue(marketData);
-        return {
-          name: agent.name,
-          color: agent.color,
-          personality: agent.personality,
-          value,
-          change: value - this.startingCash,
-          changePercent: ((value - this.startingCash) / this.startingCash) * 100,
-          isPlayer: false,
-        };
-      }),
-    ];
-
-    return entries.sort((a, b) => b.value - a.value);
-  }
-
-  getPlayerValue(marketData) {
-    let value = this.player.cash;
-    Object.keys(this.player.portfolio).forEach(ticker => {
-      if (marketData[ticker]) {
-        value += this.player.portfolio[ticker].shares * marketData[ticker].price;
-      }
-    });
-    this.player.totalValue = parseFloat(value.toFixed(2));
+  // ─── Player ──────────────────────────────────────────────────────────────
+  _playerValue() {
+    const md = this.market.getMarketData();
+    let v = this.player.cash;
+    for (const [t, pos] of Object.entries(this.player.portfolio)) {
+      if (md[t]) v += pos.shares * md[t].price;
+    }
+    this.player.totalValue = parseFloat(v.toFixed(2));
     return this.player.totalValue;
   }
 
   playerBuy(ticker, shares) {
-    const marketData = this.market.getMarketData();
-    if (!marketData[ticker]) return { success: false, message: 'Invalid ticker' };
-    
-    const price = marketData[ticker].price;
-    const cost = shares * price;
-    
+    shares = parseInt(shares, 10);
+    if (!shares || shares < 1) return { success: false, message: 'Invalid shares' };
+    const md = this.market.getMarketData();
+    if (!md[ticker]) return { success: false, message: 'Unknown ticker' };
+    const price = md[ticker].price;
+    const cost  = shares * price;
     if (cost > this.player.cash) {
-      return { success: false, message: `Insufficient funds. Need $${cost.toFixed(2)}, have $${this.player.cash.toFixed(2)}` };
+      return { success: false, message: `Need $${cost.toFixed(2)} — only $${this.player.cash.toFixed(2)} available` };
     }
-    
     this.player.cash -= cost;
-    if (!this.player.portfolio[ticker]) {
-      this.player.portfolio[ticker] = { shares: 0, avgCost: 0 };
-    }
-    const existing = this.player.portfolio[ticker];
-    const newTotalShares = existing.shares + shares;
-    existing.avgCost = (existing.shares * existing.avgCost + cost) / newTotalShares;
-    existing.shares = newTotalShares;
-    
-    const trade = { type: 'BUY', ticker, shares, price, timestamp: Date.now(), agent: 'YOU' };
+    if (!this.player.portfolio[ticker]) this.player.portfolio[ticker] = { shares: 0, avgCost: 0 };
+    const p  = this.player.portfolio[ticker];
+    const ns = p.shares + shares;
+    p.avgCost = (p.shares * p.avgCost + cost) / ns;
+    p.shares  = ns;
+    const trade = { type: 'BUY', ticker, shares, price, agent: 'YOU', timestamp: Date.now() };
     this.player.tradeHistory.push(trade);
-    this.recentTrades.unshift(trade);
-    if (this.recentTrades.length > 20) this.recentTrades.pop();
-    
-    return { success: true, trade, cash: this.player.cash };
+    this._pushFeed(trade);
+    return { success: true, trade, cash: this.player.cash,
+      message: `✅ Bought ${shares}× ${ticker} @ $${price.toFixed(2)}` };
   }
 
   playerSell(ticker, shares) {
-    const marketData = this.market.getMarketData();
-    if (!marketData[ticker]) return { success: false, message: 'Invalid ticker' };
-    if (!this.player.portfolio[ticker] || this.player.portfolio[ticker].shares < shares) {
-      return { success: false, message: 'Insufficient shares' };
+    shares = parseInt(shares, 10);
+    if (!shares || shares < 1) return { success: false, message: 'Invalid shares' };
+    const pos = this.player.portfolio[ticker];
+    if (!pos || pos.shares < shares) {
+      return { success: false, message: `Not enough shares (have ${pos?.shares ?? 0})` };
     }
-    
-    const price = marketData[ticker].price;
+    const md    = this.market.getMarketData();
+    const price = md[ticker]?.price ?? pos.avgCost;
     this.player.cash += shares * price;
-    this.player.portfolio[ticker].shares -= shares;
-    if (this.player.portfolio[ticker].shares === 0) {
-      delete this.player.portfolio[ticker];
-    }
-    
-    const trade = { type: 'SELL', ticker, shares, price, timestamp: Date.now(), agent: 'YOU' };
+    pos.shares -= shares;
+    if (pos.shares === 0) delete this.player.portfolio[ticker];
+    const trade = { type: 'SELL', ticker, shares, price, agent: 'YOU', timestamp: Date.now() };
     this.player.tradeHistory.push(trade);
-    this.recentTrades.unshift(trade);
-    if (this.recentTrades.length > 20) this.recentTrades.pop();
-    
-    return { success: true, trade, cash: this.player.cash };
+    this._pushFeed(trade);
+    return { success: true, trade, cash: this.player.cash,
+      message: `✅ Sold ${shares}× ${ticker} @ $${price.toFixed(2)}` };
   }
 
-  tick_() {
+  // ─── Tick ────────────────────────────────────────────────────────────────
+  advanceTick() {
     if (this.status !== 'active') return null;
     this.tick++;
-    
-    // Trigger potential market event
+    if (this.tick >= this.maxTicks) this.status = 'ended';
+
     const event = this.market.triggerRandomEvent();
     if (event) {
-      this.eventLog.unshift({ ...event, tick: this.tick, timestamp: Date.now() });
+      this.eventLog.unshift({ ...event, tick: this.tick, ts: Date.now() });
       if (this.eventLog.length > 10) this.eventLog.pop();
     }
-    
-    // Get event multiplier
-    const eventMultiplier = this.market.getEventMultiplier(event);
-    
-    // Update prices
-    this.market.updatePrices(eventMultiplier);
-    
-    // AI agents decide and trade
-    const aiTrades = [];
-    const marketData = this.market.getMarketData();
-    
-    this.agents.forEach(agent => {
-      const decisions = agent.decide(marketData, event);
-      decisions.forEach(trade => {
-        aiTrades.push(trade);
-        this.recentTrades.unshift(trade);
-      });
-    });
-    
-    if (this.recentTrades.length > 30) this.recentTrades = this.recentTrades.slice(0, 30);
-    
-    // Check if game over
-    if (this.tick >= this.maxTicks) {
-      this.status = 'ended';
+
+    this.market.updatePrices(this.market.getEventMultiplier(event));
+    const md = this.market.getMarketData();
+
+    // All AI agents decide + trade
+    const newTrades = [];
+    for (const agent of this.agents) {
+      agent.getPortfolioValue(md); // refresh value
+      const trades = agent.decide(md, event);
+      for (const t of trades) {
+        this._pushFeed(t);
+        newTrades.push(t);
+      }
     }
-    
-    return {
-      tick: this.tick,
-      maxTicks: this.maxTicks,
-      marketData: this.market.getMarketData(),
-      leaderboard: this.getLeaderboard(),
-      event,
-      aiTrades,
-      recentTrades: this.recentTrades.slice(0, 10),
-      player: {
-        cash: this.player.cash,
-        portfolio: this.player.portfolio,
-        totalValue: this.getPlayerValue(marketData),
+
+    return this._snapshot(md, event, newTrades);
+  }
+
+  _pushFeed(trade) {
+    this.tradeFeed.unshift(trade);
+    if (this.tradeFeed.length > 40) this.tradeFeed.pop();
+  }
+
+  // ─── Leaderboard ─────────────────────────────────────────────────────────
+  getLeaderboard(md) {
+    const pv = this._playerValue();
+    const entries = [
+      {
+        name: 'YOU', color: '#00d4ff', personality: 'Human Trader', emoji: '👤',
+        value: pv,
+        change:        pv - this.startingCash,
+        changePercent: ((pv - this.startingCash) / this.startingCash) * 100,
+        isPlayer: true,
       },
-      status: this.status,
-      eventLog: this.eventLog.slice(0, 5),
+      ...this.agents.map(a => {
+        const v = a.getPortfolioValue(md);
+        return {
+          name: a.name, color: a.color, personality: a.personality, emoji: a.emoji,
+          value: v,
+          change:        v - this.startingCash,
+          changePercent: ((v - this.startingCash) / this.startingCash) * 100,
+          isPlayer: false,
+        };
+      }),
+    ];
+    return entries.sort((a, b) => b.value - a.value);
+  }
+
+  // ─── Snapshot ─────────────────────────────────────────────────────────────
+  _snapshot(md, event, newTrades) {
+    const lb = this.getLeaderboard(md);
+    return {
+      id:          this.id,
+      tick:        this.tick,
+      maxTicks:    this.maxTicks,
+      status:      this.status,
+      marketData:  md,
+      leaderboard: lb,
+      event:       event || null,
+      newTrades,
+      tradeFeed:   this.tradeFeed.slice(0, 15),
+      eventLog:    this.eventLog.slice(0, 6),
+      player: {
+        cash:         this.player.cash,
+        portfolio:    { ...this.player.portfolio },
+        totalValue:   this._playerValue(),
+        tradeHistory: this.player.tradeHistory.slice(-30),
+      },
     };
   }
 
-  getFullState() {
-    const marketData = this.market.getMarketData();
-    return {
-      id: this.id,
-      tick: this.tick,
-      maxTicks: this.maxTicks,
-      status: this.status,
-      marketData,
-      leaderboard: this.getLeaderboard(),
-      player: {
-        cash: this.player.cash,
-        portfolio: this.player.portfolio,
-        totalValue: this.getPlayerValue(marketData),
-        tradeHistory: this.player.tradeHistory.slice(-20),
-      },
-      agents: this.agents.map(a => ({
-        name: a.name,
-        color: a.color,
-        personality: a.personality,
-        cash: a.cash,
-        portfolio: a.portfolio,
-      })),
-      recentTrades: this.recentTrades.slice(0, 10),
-      eventLog: this.eventLog.slice(0, 5),
-    };
+  fullState() {
+    const md = this.market.getMarketData();
+    return this._snapshot(md, null, []);
   }
 }
 
-// In-memory session store (for simplicity, can be moved to Redis/MongoDB)
-const sessions = new Map();
+// ─── In-memory session store ──────────────────────────────────────────────────
+const store = new Map();
 
-function createSession(selectedAgents, startingCash, speed) {
-  const session = new GameSession(selectedAgents, startingCash, speed);
-  sessions.set(session.id, session);
-  return session;
-}
-
-function getSession(id) {
-  return sessions.get(id);
-}
-
-function deleteSession(id) {
-  sessions.delete(id);
-}
-
-module.exports = { createSession, getSession, deleteSession, sessions };
+module.exports = {
+  createSession(opts) {
+    const s = new GameSession(opts);
+    store.set(s.id, s);
+    return s;
+  },
+  getSession(id) { return store.get(id) || null; },
+  deleteSession(id) { store.delete(id); },
+  TICK_INTERVAL,
+};

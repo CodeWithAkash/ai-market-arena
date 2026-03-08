@@ -1,93 +1,94 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
-const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:3001/ws';
+const WS_BASE = import.meta.env.VITE_WS_URL || 'ws://localhost:3001';
+const WS_URL  = `${WS_BASE}/ws`;
 
-export function useGameSocket(sessionId) {
-  const ws = useRef(null);
-  const [connected, setConnected] = useState(false);
-  const [gameState, setGameState] = useState(null);
-  const [lastUpdate, setLastUpdate] = useState(null);
+export function useGameSocket({ selectedAgents, startingCash, onGameOver }) {
+  const ws         = useRef(null);
+  const retryTimer = useRef(null);
+  const retries    = useRef(0);
+  const pingTimer  = useRef(null);
+  const pingSent   = useRef(null);
+
+  const [connected,   setConnected]   = useState(false);
+  const [gameState,   setGameState]   = useState(null);
   const [tradeResult, setTradeResult] = useState(null);
-  const [gameOver, setGameOver] = useState(false);
-  const reconnectTimer = useRef(null);
-  const sessionIdRef = useRef(sessionId);
+  const [latency,     setLatency]     = useState(null);
 
-  useEffect(() => {
-    sessionIdRef.current = sessionId;
-  }, [sessionId]);
+  const agentsRef      = useRef(selectedAgents);
+  const startCashRef   = useRef(startingCash);
+  const onGameOverRef  = useRef(onGameOver);
+
+  useEffect(() => { agentsRef.current = selectedAgents; }, [selectedAgents]);
+  useEffect(() => { startCashRef.current = startingCash; }, [startingCash]);
+  useEffect(() => { onGameOverRef.current = onGameOver; }, [onGameOver]);
 
   const connect = useCallback(() => {
-    if (!sessionIdRef.current) return;
-    
     try {
-      ws.current = new WebSocket(WS_URL);
-      
-      ws.current.onopen = () => {
+      const socket = new WebSocket(WS_URL);
+      ws.current = socket;
+
+      socket.onopen = () => {
         setConnected(true);
-        ws.current.send(JSON.stringify({ type: 'JOIN_SESSION', sessionId: sessionIdRef.current }));
-      };
-      
-      ws.current.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data);
-          
-          switch (message.type) {
-            case 'GAME_STATE':
-              setGameState(message.payload);
-              break;
-            case 'GAME_UPDATE':
-              setLastUpdate(message.payload);
-              setGameState(prev => prev ? { ...prev, ...message.payload } : message.payload);
-              break;
-            case 'TRADE_RESULT':
-              setTradeResult({ ...message.payload, timestamp: Date.now() });
-              break;
-            case 'GAME_OVER':
-              setGameOver(true);
-              setGameState(message.payload);
-              break;
+        retries.current = 0;
+        // Send JOIN immediately — backend creates session
+        socket.send(JSON.stringify({
+          type: 'JOIN',
+          selectedAgents: agentsRef.current || [],
+          startingCash:   startCashRef.current || 10000,
+        }));
+        // Keep-alive ping
+        pingTimer.current = setInterval(() => {
+          if (socket.readyState === WebSocket.OPEN) {
+            pingSent.current = Date.now();
+            socket.send(JSON.stringify({ type: 'PING' }));
           }
-        } catch (err) {
-          console.error('WS parse error:', err);
-        }
+        }, 20000);
       };
-      
-      ws.current.onclose = () => {
+
+      socket.onmessage = e => {
+        let msg;
+        try { msg = JSON.parse(e.data); } catch { return; }
+        if (msg.type === 'STATE')        setGameState(msg.payload);
+        if (msg.type === 'TICK')         setGameState(msg.payload);
+        if (msg.type === 'TRADE_RESULT') setTradeResult({ ...msg.payload, _ts: Date.now() });
+        if (msg.type === 'GAME_OVER')  { setGameState(msg.payload); onGameOverRef.current?.(msg.payload); }
+        if (msg.type === 'PONG' && pingSent.current) setLatency(Date.now() - pingSent.current);
+      };
+
+      socket.onclose = () => {
         setConnected(false);
-        // Auto-reconnect after 2 seconds
-        reconnectTimer.current = setTimeout(() => {
-          if (sessionIdRef.current) connect();
-        }, 2000);
+        clearInterval(pingTimer.current);
+        const delay = Math.min(1000 * 2 ** retries.current, 12000);
+        retries.current++;
+        retryTimer.current = setTimeout(connect, delay);
       };
-      
-      ws.current.onerror = (err) => {
-        console.error('WebSocket error:', err);
-        ws.current?.close();
-      };
+
+      socket.onerror = () => socket.close();
+
     } catch (err) {
-      console.error('WS connection failed:', err);
+      console.error('[WS] connect error:', err);
     }
   }, []);
 
   useEffect(() => {
-    if (sessionId) {
-      connect();
-    }
-    
+    connect();
     return () => {
-      clearTimeout(reconnectTimer.current);
-      if (ws.current) {
-        ws.current.send(JSON.stringify({ type: 'LEAVE_SESSION' }));
-        ws.current.close();
-      }
+      clearTimeout(retryTimer.current);
+      clearInterval(pingTimer.current);
+      ws.current?.close();
     };
-  }, [sessionId, connect]);
+  }, [connect]);
 
-  const sendTrade = useCallback((type, ticker, shares) => {
-    if (ws.current?.readyState === WebSocket.OPEN) {
-      ws.current.send(JSON.stringify({ type, ticker, shares }));
-    }
+  const sendBuy  = useCallback((ticker, shares) => {
+    if (ws.current?.readyState === WebSocket.OPEN)
+      ws.current.send(JSON.stringify({ type: 'BUY', ticker, shares: parseInt(shares, 10) }));
   }, []);
 
-  return { connected, gameState, lastUpdate, tradeResult, gameOver, sendTrade };
+  const sendSell = useCallback((ticker, shares) => {
+    if (ws.current?.readyState === WebSocket.OPEN)
+      ws.current.send(JSON.stringify({ type: 'SELL', ticker, shares: parseInt(shares, 10) }));
+  }, []);
+
+  return { connected, gameState, tradeResult, latency, sendBuy, sendSell };
 }

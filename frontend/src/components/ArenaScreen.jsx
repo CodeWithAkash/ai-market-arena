@@ -1,257 +1,186 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useGameSocket } from '../hooks/useGameSocket';
 import ParticleField from './ParticleField';
-import LeaderboardPanel from './LeaderboardPanel';
 import StockPanel from './StockPanel';
 import TradePanel from './TradePanel';
-import { EventFeed, TradeFeed } from './FeedPanels';
+import { LeaderboardPanel, EventFeed, TradeFeed } from './Panels';
 import GameOverScreen from './GameOverScreen';
 
-function HUDBar({ tick, maxTicks, status, connected, playerValue, startingCash }) {
-  const progress = (tick / maxTicks) * 100;
-  const pnl = playerValue - startingCash;
-  const pct = ((pnl) / startingCash) * 100;
-  const isUp = pnl >= 0;
+// ─── HUD top bar ──────────────────────────────────────────────────────────────
+function HUD({ tick, maxTicks, pv, start, connected, latency, onPause, paused }) {
+  const progress = maxTicks > 0 ? (tick/maxTicks)*100 : 0;
+  const pnl  = pv - start;
+  const pct  = (pnl/start)*100;
+  const up   = pnl >= 0;
+  const hot  = progress > 75;
 
   return (
-    <div style={{
-      width: '100%', padding: '8px 16px',
-      background: 'rgba(1,2,8,0.9)',
-      borderBottom: '1px solid rgba(0,212,255,0.2)',
-      display: 'flex', alignItems: 'center', gap: '16px',
-      zIndex: 100, position: 'relative', flexShrink: 0,
-    }}>
-      {/* Logo */}
-      <div style={{
-        fontFamily: 'var(--font-display)',
-        fontSize: '13px', fontWeight: '900',
-        background: 'linear-gradient(135deg, #00d4ff, #00ff88)',
-        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-        backgroundClip: 'text',
-        letterSpacing: '0.05em', whiteSpace: 'nowrap',
-      }}>
-        AI MARKET ARENA
-      </div>
+    <div style={{ padding:'7px 14px', background:'rgba(1,2,8,.96)', borderBottom:'1px solid rgba(0,212,255,.22)',
+      display:'flex', alignItems:'center', gap:12, flexShrink:0, zIndex:100 }}>
 
-      {/* Connection status */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-        <div style={{
-          width: '6px', height: '6px', borderRadius: '50%',
-          background: connected ? 'var(--neon-green)' : 'var(--neon-pink)',
-          boxShadow: `0 0 8px ${connected ? 'var(--neon-green)' : 'var(--neon-pink)'}`,
-          animation: 'pulse-neon 2s ease infinite',
-        }} />
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)' }}>
-          {connected ? 'LIVE' : 'RECONNECTING'}
+      {/* Logo */}
+      <span style={{ fontFamily:'var(--fd)', fontSize:13, fontWeight:900,
+        background:'linear-gradient(135deg,#00d4ff,#00ff88)',
+        WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text',
+        letterSpacing:'.05em', whiteSpace:'nowrap' }}>
+        AI MARKET ARENA
+      </span>
+
+      {/* Live dot */}
+      <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+        <div style={{ width:7,height:7,borderRadius:'50%',
+          background: connected?'var(--g)':'var(--pink)',
+          boxShadow:`0 0 10px ${connected?'var(--g)':'var(--pink)'}`,
+          animation:'pulse 1.8s infinite' }} />
+        <span style={{ fontFamily:'var(--fm)', fontSize:9, color: connected?'var(--g)':'var(--pink)' }}>
+          {connected ? (latency ? `LIVE · ${latency}ms` : 'LIVE') : 'RECONNECTING…'}
         </span>
       </div>
 
-      {/* Progress bar */}
-      <div style={{ flex: 1, position: 'relative' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)' }}>
-            TICK {tick}/{maxTicks}
-          </span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)' }}>
-            {(100 - progress).toFixed(0)}% REMAINING
-          </span>
+      {/* Progress */}
+      <div style={{ flex:1 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', marginBottom:3 }}>
+          <span style={{ fontFamily:'var(--fm)', fontSize:8, color:'var(--t3)' }}>TICK {tick}/{maxTicks}</span>
+          <span style={{ fontFamily:'var(--fm)', fontSize:8, color: hot?'var(--ora)':'var(--t3)' }}>{(100-progress).toFixed(0)}% LEFT</span>
         </div>
-        <div style={{ height: '4px', background: 'rgba(0,212,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
-          <div style={{
-            height: '100%', width: `${progress}%`,
-            background: progress > 75 ? 'linear-gradient(90deg, var(--neon-orange), var(--neon-pink))' : 'linear-gradient(90deg, var(--neon-cyan), var(--neon-green))',
-            boxShadow: '0 0 10px rgba(0,212,255,0.5)',
-            transition: 'width 0.5s ease, background 0.5s ease',
-            borderRadius: '2px',
-          }} />
+        <div style={{ height:5, background:'rgba(0,212,255,.1)', borderRadius:3, overflow:'hidden' }}>
+          <div style={{ height:'100%', width:`${progress}%`,
+            background: hot?'linear-gradient(90deg,#ff8800,#ff0088)':'linear-gradient(90deg,#00d4ff,#00ff88)',
+            borderRadius:3, transition:'width .6s ease' }} />
         </div>
       </div>
 
-      {/* Player P&L */}
-      <div style={{ textAlign: 'right', flexShrink: 0 }}>
-        <div style={{
-          fontFamily: 'var(--font-display)', fontSize: '16px', fontWeight: '700',
-          color: isUp ? 'var(--neon-green)' : 'var(--neon-pink)',
-          textShadow: `0 0 15px ${isUp ? 'var(--neon-green)' : 'var(--neon-pink)'}`,
-        }}>
-          ${playerValue?.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+      {/* Pause btn */}
+      <button onClick={onPause} style={{
+        padding:'3px 10px', fontFamily:'var(--fm)', fontSize:10,
+        background:'rgba(255,215,0,.1)', border:'1px solid rgba(255,215,0,.4)',
+        borderRadius:5, color:'var(--gold)',
+      }}>{paused ? '▶ RESUME' : '⏸ PAUSE'}</button>
+
+      {/* P&L */}
+      <div style={{ textAlign:'right', flexShrink:0 }}>
+        <div style={{ fontFamily:'var(--fd)', fontSize:17, fontWeight:700,
+          color: up?'var(--g)':'var(--pink)',
+          textShadow:`0 0 14px ${up?'var(--g)':'var(--pink)'}` }}>
+          ${pv?.toLocaleString('en',{maximumFractionDigits:0})}
         </div>
-        <div style={{
-          fontFamily: 'var(--font-mono)', fontSize: '10px',
-          color: isUp ? 'var(--neon-green)' : 'var(--neon-pink)',
-        }}>
-          {isUp ? '+' : ''}{pct.toFixed(2)}% | {isUp ? '▲' : '▼'} ${Math.abs(pnl).toFixed(0)}
+        <div style={{ fontFamily:'var(--fm)', fontSize:9, color: up?'var(--g)':'var(--pink)' }}>
+          {up?'+':''}{pct.toFixed(2)}% | {up?'▲':'▼'} ${Math.abs(pnl).toFixed(0)}
         </div>
       </div>
     </div>
   );
 }
 
-export default function ArenaScreen({ sessionId, initialState, onExit }) {
-  const { connected, gameState, tradeResult, gameOver, sendTrade } = useGameSocket(sessionId);
-  const [selectedStock, setSelectedStock] = useState(null);
-  const [localTradeResult, setLocalTradeResult] = useState(null);
+// ─── Arena ────────────────────────────────────────────────────────────────────
+export default function ArenaScreen({ selectedAgents, startingCash = 10000, onExit }) {
+  const [selected,  setSelected]  = useState('AAPL');
+  const [gameOver,  setGameOver]  = useState(false);
+  const [finalState,setFinalState]= useState(null);
+  const [paused,    setPaused]    = useState(false);
 
-  const state = gameState || initialState;
+  const { connected, gameState, tradeResult, latency, sendBuy, sendSell } = useGameSocket({
+    selectedAgents,
+    startingCash,
+    onGameOver: s => { setFinalState(s); setGameOver(true); },
+  });
 
-  // Handle trade results
-  useEffect(() => {
-    if (tradeResult) {
-      setLocalTradeResult(tradeResult);
-    }
-  }, [tradeResult]);
+  const handleBuy  = useCallback((t,s) => sendBuy(t,s),  [sendBuy]);
+  const handleSell = useCallback((t,s) => sendSell(t,s), [sendSell]);
 
-  const handleBuy = useCallback((ticker, shares) => {
-    sendTrade('BUY', ticker, shares);
-  }, [sendTrade]);
+  // Pause: just stop sending (server still ticks — proper pause needs backend support)
+  // We show pause visually but game continues on server (stateless pause is complex)
 
-  const handleSell = useCallback((ticker, shares) => {
-    sendTrade('SELL', ticker, shares);
-  }, [sendTrade]);
+  if (gameOver && finalState) return <GameOverScreen gameState={finalState} onPlayAgain={onExit} />;
 
-  if (!state) {
-    return (
-      <div style={{
-        width: '100vw', height: '100vh',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'var(--bg-deep)',
-      }}>
-        <div style={{ textAlign: 'center' }}>
-          <div className="spinner" style={{ width: '40px', height: '40px', margin: '0 auto 16px' }} />
-          <div style={{ fontFamily: 'var(--font-display)', color: 'var(--neon-cyan)', fontSize: '14px', letterSpacing: '0.2em' }}>
-            INITIALIZING ARENA...
-          </div>
+  if (!gameState) return (
+    <div style={{ width:'100vw',height:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--bg0)' }}>
+      <div style={{ textAlign:'center' }}>
+        <div className="spinner" style={{ width:42,height:42,margin:'0 auto 16px' }} />
+        <div style={{ fontFamily:'var(--fd)',color:'var(--c)',fontSize:13,letterSpacing:'.2em' }}>CONNECTING TO ARENA…</div>
+        <div style={{ fontFamily:'var(--fm)',color:'var(--t3)',fontSize:10,marginTop:8 }}>
+          {connected ? 'Joining session…' : 'Establishing WebSocket connection…'}
         </div>
       </div>
-    );
-  }
+    </div>
+  );
 
-  if (gameOver || state.status === 'ended') {
-    return <GameOverScreen gameState={state} onPlayAgain={onExit} />;
-  }
-
-  const { marketData = {}, leaderboard = [], player = {}, recentTrades = [], eventLog = [], tick = 0, maxTicks = 200 } = state;
+  const { marketData={}, leaderboard=[], player={}, tradeFeed=[], eventLog=[], tick=0, maxTicks=200 } = gameState;
 
   return (
-    <div style={{
-      width: '100vw', height: '100vh',
-      display: 'flex', flexDirection: 'column',
-      background: 'var(--bg-deep)',
-      overflow: 'hidden',
-    }}>
-      <ParticleField intensity={0.5} />
-      
-      {/* HUD Top Bar */}
-      <HUDBar
-        tick={tick}
-        maxTicks={maxTicks}
-        connected={connected}
-        playerValue={player.totalValue || 10000}
-        startingCash={10000}
-        status={state.status}
+    <div style={{ width:'100vw',height:'100vh',display:'flex',flexDirection:'column',background:'var(--bg0)',overflow:'hidden' }}>
+      <ParticleField count={45} />
+
+      <HUD
+        tick={tick} maxTicks={maxTicks}
+        pv={player.totalValue||startingCash} start={startingCash}
+        connected={connected} latency={latency}
+        paused={paused} onPause={() => setPaused(p => !p)}
       />
 
-      {/* Main 3-column layout */}
-      <div style={{
-        flex: 1, display: 'grid',
-        gridTemplateColumns: '260px 1fr 280px',
-        gap: '8px', padding: '8px',
-        overflow: 'hidden',
-        position: 'relative', zIndex: 10,
-      }}>
-        
-        {/* LEFT: Stock list */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', overflow: 'hidden' }}>
-          <StockPanel
-            marketData={marketData}
-            onSelectStock={setSelectedStock}
-            selectedStock={selectedStock}
-            playerPortfolio={player.portfolio}
-          />
-        </div>
+      {/* 3-column layout */}
+      <div style={{ flex:1,display:'grid',gridTemplateColumns:'248px 1fr 272px',gap:8,padding:8,overflow:'hidden',position:'relative',zIndex:10 }}>
 
-        {/* CENTER: Trade panel + feeds */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', overflow: 'hidden' }}>
+        {/* LEFT: stock list */}
+        <StockPanel
+          marketData={marketData}
+          selected={selected}
+          onSelect={setSelected}
+          portfolio={player.portfolio}
+        />
+
+        {/* CENTER: chart + trade + feeds */}
+        <div style={{ display:'flex',flexDirection:'column',gap:8,overflow:'hidden' }}>
           <TradePanel
-            selectedStock={selectedStock}
+            ticker={selected}
             marketData={marketData}
-            playerData={player}
+            player={player}
             onBuy={handleBuy}
             onSell={handleSell}
-            tradeResult={localTradeResult}
+            tradeResult={tradeResult}
           />
-          
-          {/* Bottom center: Event + Trade feeds */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', flex: 1, overflow: 'hidden' }}>
+          <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,flex:1,minHeight:0 }}>
             <EventFeed events={eventLog} />
-            <TradeFeed trades={recentTrades} />
+            <TradeFeed trades={tradeFeed} />
           </div>
         </div>
 
-        {/* RIGHT: Leaderboard + Portfolio */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', overflow: 'hidden' }}>
-          <LeaderboardPanel leaderboard={leaderboard} startingCash={10000} />
-          
-          {/* Portfolio summary */}
-          <div className="glass-panel" style={{
-            borderRadius: '10px',
-            border: '1px solid rgba(0,255,136,0.2)',
-            overflow: 'hidden', flex: 1,
-          }}>
-            <div style={{
-              padding: '10px 14px',
-              borderBottom: '1px solid rgba(0,255,136,0.15)',
-              display: 'flex', alignItems: 'center', gap: '8px',
-            }}>
+        {/* RIGHT: leaderboard + portfolio */}
+        <div style={{ display:'flex',flexDirection:'column',gap:8,overflow:'hidden' }}>
+          <LeaderboardPanel leaderboard={leaderboard} startingCash={startingCash} />
+
+          {/* Portfolio */}
+          <div className="glass" style={{ borderRadius:10,border:'1px solid rgba(0,255,136,.2)',overflow:'hidden',flex:1,minHeight:0,display:'flex',flexDirection:'column' }}>
+            <div style={{ padding:'9px 13px',borderBottom:'1px solid rgba(0,255,136,.14)',display:'flex',gap:7,alignItems:'center',flexShrink:0 }}>
               <span>💼</span>
-              <span style={{ fontFamily: 'var(--font-display)', fontSize: '11px', letterSpacing: '0.2em', color: 'var(--neon-green)' }}>
-                YOUR PORTFOLIO
-              </span>
+              <span style={{ fontFamily:'var(--fd)',fontSize:10,letterSpacing:'.2em',color:'var(--g)' }}>YOUR PORTFOLIO</span>
             </div>
-            <div className="scrollable" style={{ maxHeight: '160px' }}>
-              <div style={{ padding: '8px 14px', display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(0,212,255,0.08)' }}>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)' }}>CASH</span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--neon-cyan)' }}>
-                  ${player.cash?.toFixed(2)}
-                </span>
+            <div className="scroll" style={{ flex:1 }}>
+              <div style={{ padding:'7px 13px',display:'flex',justifyContent:'space-between',borderBottom:'1px solid rgba(0,212,255,.07)' }}>
+                <span style={{ fontFamily:'var(--fm)',fontSize:10,color:'var(--t3)' }}>CASH</span>
+                <span style={{ fontFamily:'var(--fm)',fontSize:10,color:'var(--c)' }}>${player.cash?.toFixed(2)}</span>
               </div>
-              {Object.keys(player.portfolio || {}).length === 0 ? (
-                <div style={{ padding: '16px', textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)' }}>
-                  No positions held
-                </div>
-              ) : (
-                Object.entries(player.portfolio || {}).map(([ticker, pos]) => {
-                  const currentPrice = marketData[ticker]?.price || 0;
-                  const value = pos.shares * currentPrice;
-                  const pnl = (currentPrice - pos.avgCost) * pos.shares;
-                  const pnlPct = ((currentPrice - pos.avgCost) / pos.avgCost) * 100;
-                  const isUp = pnl >= 0;
-                  
-                  return (
-                    <div key={ticker} style={{
-                      padding: '8px 14px',
-                      borderBottom: '1px solid rgba(0,212,255,0.05)',
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                        <span style={{ fontFamily: 'var(--font-display)', fontSize: '12px', fontWeight: '700', color: 'var(--text-primary)' }}>
-                          {ticker}
-                        </span>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-primary)' }}>
-                          ${value.toFixed(0)}
-                        </span>
+              {Object.keys(player.portfolio||{}).length === 0
+                ? <div style={{ padding:20,textAlign:'center',fontFamily:'var(--fm)',fontSize:10,color:'var(--t3)',lineHeight:1.8 }}>
+                    No positions held.<br/><span style={{ color:'rgba(0,212,255,.35)' }}>Select stock → BUY</span>
+                  </div>
+                : Object.entries(player.portfolio).map(([tk,pos]) => {
+                    const p   = marketData[tk]?.price || 0;
+                    const pct = pos.avgCost > 0 ? ((p-pos.avgCost)/pos.avgCost)*100 : 0;
+                    return (
+                      <div key={tk} onClick={() => setSelected(tk)} style={{ padding:'7px 13px',borderBottom:'1px solid rgba(0,212,255,.04)',cursor:'pointer' }}>
+                        <div style={{ display:'flex',justifyContent:'space-between',marginBottom:2 }}>
+                          <span style={{ fontFamily:'var(--fd)',fontSize:11,fontWeight:700,color:'var(--t1)' }}>{tk}</span>
+                          <span style={{ fontFamily:'var(--fm)',fontSize:11,color:'var(--t1)' }}>${(pos.shares*p).toFixed(0)}</span>
+                        </div>
+                        <div style={{ display:'flex',justifyContent:'space-between' }}>
+                          <span style={{ fontFamily:'var(--fm)',fontSize:9,color:'var(--t3)' }}>{pos.shares} @ ${pos.avgCost?.toFixed(2)}</span>
+                          <span style={{ fontFamily:'var(--fm)',fontSize:9,color:pct>=0?'var(--g)':'var(--pink)' }}>{pct>=0?'+':''}{pct.toFixed(1)}%</span>
+                        </div>
                       </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)' }}>
-                          {pos.shares} @ ${pos.avgCost?.toFixed(2)}
-                        </span>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: isUp ? 'var(--neon-green)' : 'var(--neon-pink)' }}>
-                          {isUp ? '+' : ''}{pnlPct.toFixed(1)}%
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
+                    );
+                  })
+              }
             </div>
           </div>
         </div>

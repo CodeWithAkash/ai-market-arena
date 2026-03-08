@@ -1,177 +1,146 @@
+'use strict';
 require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const http = require('http');
+
+const express   = require('express');
+const cors      = require('cors');
+const http      = require('http');
 const WebSocket = require('ws');
-const mongoose = require('mongoose');
+const mongoose  = require('mongoose');
+
 const gameRoutes = require('./routes/game');
-const { getSession } = require('./services/gameSession');
+const { getSession, createSession, TICK_INTERVAL } = require('./services/gameSession');
 
-const app = express();
+const app    = express();
 const server = http.createServer(app);
+const wss    = new WebSocket.Server({ server, path: '/ws' });
 
-// WebSocket server
-const wss = new WebSocket.Server({ server, path: '/ws' });
-
-// CORS
-const allowedOrigins = [
-  process.env.FRONTEND_URL || 'http://localhost:5173',
-  'http://localhost:5173',
-  'http://localhost:3000',
-];
-
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.some(o => origin.startsWith(o.replace('*', '')))) {
-      callback(null, true);
-    } else {
-      callback(null, true); // Allow all in dev; tighten in prod
-    }
-  },
-  credentials: true,
-}));
-
+app.use(cors({ origin: (origin, cb) => cb(null, true), credentials: true }));
 app.use(express.json());
-
-// Routes
 app.use('/api', gameRoutes);
 
-// WebSocket game loop
-const gameLoops = new Map(); // sessionId → { interval, clients }
-const clientSessions = new Map(); // ws → sessionId
+const sessionClients = new Map();
+const sessionTimers  = new Map();
+const wsSession      = new Map();
 
-wss.on('connection', (ws) => {
-  console.log('WebSocket client connected');
+wss.on('connection', (ws, req) => {
+  console.log(`[WS] Client connected from ${req.socket.remoteAddress}`);
 
-  ws.on('message', (message) => {
-    try {
-      const data = JSON.parse(message);
-      
-      if (data.type === 'JOIN_SESSION') {
-        const { sessionId } = data;
-        clientSessions.set(ws, sessionId);
-        
-        if (!gameLoops.has(sessionId)) {
-          gameLoops.set(sessionId, new Set());
-        }
-        gameLoops.get(sessionId).add(ws);
-        
-        // Send initial state
-        const session = getSession(sessionId);
-        if (session) {
-          ws.send(JSON.stringify({ type: 'GAME_STATE', payload: session.getFullState() }));
-          startGameLoop(sessionId);
-        }
+  ws.on('message', raw => {
+    let msg;
+    try { msg = JSON.parse(raw); } catch { return; }
+
+    if (msg.type === 'JOIN') {
+      const { sessionId, selectedAgents, startingCash } = msg;
+      let session = getSession(sessionId);
+      if (!session && selectedAgents?.length) {
+        session = createSession({ selectedAgents, startingCash: startingCash || 10000 });
       }
-      
-      if (data.type === 'BUY' || data.type === 'SELL') {
-        const sessionId = clientSessions.get(ws);
-        if (!sessionId) return;
-        const session = getSession(sessionId);
-        if (!session) return;
-        
-        let result;
-        if (data.type === 'BUY') {
-          result = session.playerBuy(data.ticker, data.shares);
-        } else {
-          result = session.playerSell(data.ticker, data.shares);
-        }
-        
-        ws.send(JSON.stringify({ type: 'TRADE_RESULT', payload: result }));
+      if (!session) {
+        ws.send(JSON.stringify({ type: 'ERROR', message: 'Session not found' }));
+        return;
       }
-      
-      if (data.type === 'LEAVE_SESSION') {
-        removeClientFromSession(ws);
-      }
-      
-    } catch (err) {
-      console.error('WS message error:', err);
+      wsSession.set(ws, session.id);
+      if (!sessionClients.has(session.id)) sessionClients.set(session.id, new Set());
+      sessionClients.get(session.id).add(ws);
+      ws.send(JSON.stringify({ type: 'STATE', payload: session.fullState() }));
+      startLoop(session.id);
+    }
+
+    if (msg.type === 'BUY') {
+      const sid = wsSession.get(ws);
+      if (!sid) return;
+      const session = getSession(sid);
+      if (!session) return;
+      const result = session.playerBuy(msg.ticker, msg.shares);
+      ws.send(JSON.stringify({ type: 'TRADE_RESULT', payload: result }));
+      if (result.success) broadcast(sid, { type: 'STATE', payload: session.fullState() });
+    }
+
+    if (msg.type === 'SELL') {
+      const sid = wsSession.get(ws);
+      if (!sid) return;
+      const session = getSession(sid);
+      if (!session) return;
+      const result = session.playerSell(msg.ticker, msg.shares);
+      ws.send(JSON.stringify({ type: 'TRADE_RESULT', payload: result }));
+      if (result.success) broadcast(sid, { type: 'STATE', payload: session.fullState() });
+    }
+
+    if (msg.type === 'PING') {
+      ws.send(JSON.stringify({ type: 'PONG', ts: Date.now() }));
     }
   });
 
   ws.on('close', () => {
-    removeClientFromSession(ws);
-    console.log('WebSocket client disconnected');
+    const sid = wsSession.get(ws);
+    if (sid) {
+      const clients = sessionClients.get(sid);
+      if (clients) {
+        clients.delete(ws);
+        if (clients.size === 0) {
+          setTimeout(() => {
+            if (!sessionClients.get(sid)?.size) {
+              stopLoop(sid);
+              sessionClients.delete(sid);
+            }
+          }, 30000);
+        }
+      }
+    }
+    wsSession.delete(ws);
+    console.log('[WS] Client disconnected');
   });
 
-  ws.on('error', (err) => {
-    console.error('WebSocket error:', err);
-  });
+  ws.on('error', err => console.error('[WS] Error:', err.message));
 });
 
-function removeClientFromSession(ws) {
-  const sessionId = clientSessions.get(ws);
-  if (sessionId && gameLoops.has(sessionId)) {
-    gameLoops.get(sessionId).delete(ws);
-    if (gameLoops.get(sessionId).size === 0) {
-      // Stop game loop if no clients
-      clearInterval(gameIntervals.get(sessionId));
-      gameIntervals.delete(sessionId);
-      gameLoops.delete(sessionId);
-    }
-  }
-  clientSessions.delete(ws);
-}
-
-const gameIntervals = new Map();
-
-function startGameLoop(sessionId) {
-  if (gameIntervals.has(sessionId)) return; // Already running
-  
-  const session = getSession(sessionId);
-  if (!session) return;
-  
-  const speed = session.speed || 2000;
-  
-  const interval = setInterval(() => {
-    const session = getSession(sessionId);
-    if (!session || session.status === 'ended') {
-      clearInterval(interval);
-      gameIntervals.delete(sessionId);
-      
-      // Broadcast game over
-      broadcastToSession(sessionId, { type: 'GAME_OVER', payload: session?.getFullState() });
+function startLoop(sid) {
+  if (sessionTimers.has(sid)) return;
+  const timer = setInterval(() => {
+    const session = getSession(sid);
+    if (!session) { stopLoop(sid); return; }
+    if (session.status === 'ended') {
+      broadcast(sid, { type: 'GAME_OVER', payload: session.fullState() });
+      stopLoop(sid);
       return;
     }
-    
-    const update = session.tick_();
-    if (update) {
-      broadcastToSession(sessionId, { type: 'GAME_UPDATE', payload: update });
-    }
-  }, speed);
-  
-  gameIntervals.set(sessionId, interval);
+    const update = session.advanceTick();
+    if (update) broadcast(sid, { type: 'TICK', payload: update });
+  }, TICK_INTERVAL);
+  sessionTimers.set(sid, timer);
+  console.log(`[LOOP] Started for session ${sid}`);
 }
 
-function broadcastToSession(sessionId, message) {
-  const clients = gameLoops.get(sessionId);
+function stopLoop(sid) {
+  const timer = sessionTimers.get(sid);
+  if (timer) { clearInterval(timer); sessionTimers.delete(sid); }
+}
+
+function broadcast(sid, msg) {
+  const clients = sessionClients.get(sid);
   if (!clients) return;
-  
-  const data = JSON.stringify(message);
-  clients.forEach(ws => {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(data);
-    }
-  });
+  const data = JSON.stringify(msg);
+  for (const ws of clients) {
+    if (ws.readyState === WebSocket.OPEN) ws.send(data);
+  }
 }
 
-// MongoDB connection
-const connectDB = async () => {
-  if (process.env.MONGODB_URI) {
-    try {
-      await mongoose.connect(process.env.MONGODB_URI);
-      console.log('✅ MongoDB connected');
-    } catch (err) {
-      console.error('MongoDB connection error:', err);
-    }
-  } else {
-    console.log('⚠️  No MONGODB_URI — leaderboard persistence disabled');
+async function connectDB() {
+  const uri = process.env.MONGODB_URI;
+  if (!uri) { console.warn('[DB] No MONGODB_URI'); return; }
+  try {
+    await mongoose.connect(uri);
+    console.log('[DB] MongoDB connected ✅');
+  } catch (err) {
+    console.error('[DB] Connection failed:', err.message);
   }
-};
+}
 
 connectDB();
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
-  console.log(`🚀 AI Market Arena server running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
+
+process.on('SIGTERM', () => server.close(() => process.exit(0)));
