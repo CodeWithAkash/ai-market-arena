@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import ParticleField from './ParticleField';
-import { createSession } from '../utils/api';
 
 const AGENTS = [
   {
