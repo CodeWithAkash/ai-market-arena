@@ -1,326 +1,192 @@
 import { useState, useEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { LineChart, Line, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
-const CustomTooltip = ({ active, payload }) => {
-  if (active && payload && payload.length) {
-    return (
-      <div style={{
-        background: 'rgba(5,18,40,0.95)', border: '1px solid rgba(0,212,255,0.3)',
-        borderRadius: '6px', padding: '8px 12px',
-        fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--neon-cyan)',
-      }}>
-        ${payload[0].value?.toFixed(2)}
-      </div>
-    );
-  }
-  return null;
-};
+const TT = ({ active, payload }) => active && payload?.length
+  ? <div style={{ background:'rgba(4,14,32,.95)', border:'1px solid rgba(0,212,255,.3)', borderRadius:6, padding:'6px 10px', fontFamily:'var(--fm)', fontSize:11, color:'var(--c)' }}>
+      ${payload[0].value?.toFixed(2)}
+    </div>
+  : null;
 
-export default function TradePanel({ selectedStock, marketData, playerData, onBuy, onSell, tradeResult }) {
+export default function TradePanel({ ticker, marketData, player, onBuy, onSell, tradeResult }) {
+  const [mode,   setMode]   = useState('BUY');
   const [shares, setShares] = useState(1);
-  const [mode, setMode] = useState('BUY');
-  const [resultMsg, setResultMsg] = useState(null);
+  const [flash,  setFlash]  = useState(null);
 
-  const stock = selectedStock ? marketData?.[selectedStock] : null;
-  const holding = selectedStock ? playerData?.portfolio?.[selectedStock] : null;
-  const cash = playerData?.cash || 0;
-
-  const chartData = stock?.history?.map((price, i) => ({ i, price })) || [];
-  const currentPrice = stock?.price || 0;
-  const costEstimate = shares * currentPrice;
-  const canBuy = cash >= costEstimate && shares > 0;
-  const canSell = (holding?.shares || 0) >= shares && shares > 0;
+  const s       = ticker ? marketData?.[ticker] : null;
+  const holding = ticker ? player?.portfolio?.[ticker] : null;
+  const cash    = player?.cash || 0;
+  const price   = s?.price || 0;
+  const cost    = shares * price;
+  const canBuy  = cash >= cost && shares >= 1;
+  const canSell = (holding?.shares || 0) >= shares && shares >= 1;
+  const hist    = s?.history || [];
+  const first   = hist[0] || price;
+  const sessPct = first > 0 ? ((price - first) / first) * 100 : 0;
+  const up      = sessPct >= 0;
+  const chartData = hist.map((p, i) => ({ i, p }));
+  const ind     = s?.indicators || {};
 
   useEffect(() => {
-    if (tradeResult) {
-      setResultMsg(tradeResult);
-      const t = setTimeout(() => setResultMsg(null), 2000);
-      return () => clearTimeout(t);
-    }
-  }, [tradeResult]);
+    if (!tradeResult) return;
+    setFlash(tradeResult);
+    const t = setTimeout(() => setFlash(null), 2200);
+    return () => clearTimeout(t);
+  }, [tradeResult?._ts]);
 
-  const handleTrade = () => {
-    if (mode === 'BUY') onBuy(selectedStock, shares);
-    else onSell(selectedStock, shares);
+  const handleBuy = () => {
+    if (typeof onBuy === 'function') onBuy(ticker, shares);
   };
 
-  if (!selectedStock || !stock) {
-    return (
-      <div className="glass-panel" style={{
-        borderRadius: '10px', padding: '32px',
-        border: '1px solid rgba(0,212,255,0.15)',
-        display: 'flex', flexDirection: 'column', alignItems: 'center',
-        justifyContent: 'center', gap: '12px', minHeight: '300px',
-      }}>
-        <span style={{ fontSize: '40px', opacity: 0.4 }}>📈</span>
-        <div style={{ fontFamily: 'var(--font-display)', color: 'var(--text-muted)', fontSize: '12px', letterSpacing: '0.2em' }}>
-          SELECT A STOCK TO TRADE
-        </div>
-        <div style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', fontSize: '10px' }}>
-          Click any ticker from the market panel
-        </div>
-      </div>
-    );
-  }
+  const handleSell = () => {
+    if (typeof onSell === 'function') onSell(ticker, shares);
+  };
 
-  const history = stock.history || [];
-  const firstPrice = history[0] || currentPrice;
-  const totalChange = ((currentPrice - firstPrice) / firstPrice) * 100;
-  const isUp = totalChange >= 0;
-  const indicators = stock.indicators || {};
+  if (!ticker || !s) return (
+    <div className="glass" style={{ borderRadius:10, border:'1px solid var(--border)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:12, flex:1 }}>
+      <span style={{ fontSize:36, opacity:.3 }}>📈</span>
+      <span style={{ fontFamily:'var(--fd)', color:'var(--t3)', fontSize:11, letterSpacing:'.2em' }}>SELECT A STOCK TO TRADE</span>
+      <span style={{ fontFamily:'var(--fm)', color:'var(--t3)', fontSize:10 }}>← click any ticker from the market panel</span>
+    </div>
+  );
 
   return (
-    <div className="glass-panel" style={{
-      borderRadius: '10px',
-      border: `1px solid ${isUp ? 'rgba(0,255,136,0.25)' : 'rgba(255,0,136,0.25)'}`,
-      overflow: 'hidden',
-    }}>
-      {/* Stock header */}
-      <div style={{
-        padding: '14px 18px',
-        background: isUp ? 'rgba(0,255,136,0.05)' : 'rgba(255,0,136,0.05)',
-        borderBottom: '1px solid rgba(0,212,255,0.1)',
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-      }}>
+    <div className="glass" style={{ borderRadius:10, border:`1px solid ${up?'rgba(0,255,136,.25)':'rgba(255,0,136,.25)'}`, overflow:'hidden', display:'flex', flexDirection:'column' }}>
+
+      {/* Header */}
+      <div style={{ padding:'12px 18px', background: up?'rgba(0,255,136,.04)':'rgba(255,0,136,.04)', borderBottom:'1px solid rgba(0,212,255,.08)', display:'flex', justifyContent:'space-between', alignItems:'center', flexShrink:0 }}>
         <div>
-          <div style={{
-            fontFamily: 'var(--font-display)', fontSize: '20px', fontWeight: '900',
-            color: isUp ? 'var(--neon-green)' : 'var(--neon-pink)',
-            textShadow: `0 0 20px ${isUp ? 'var(--neon-green)' : 'var(--neon-pink)'}`,
-          }}>
-            {selectedStock}
-          </div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)' }}>
-            {stock.name} · {stock.sector}
-          </div>
+          <div style={{ fontFamily:'var(--fd)', fontSize:22, fontWeight:900, color: up?'var(--g)':'var(--pink)', textShadow:`0 0 20px ${up?'var(--g)':'var(--pink)'}` }}>{ticker}</div>
+          <div style={{ fontFamily:'var(--fm)', fontSize:9, color:'var(--t3)' }}>{s.name} · {s.sector}</div>
         </div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{
-            fontFamily: 'var(--font-mono)', fontSize: '24px', fontWeight: '700',
-            color: 'var(--text-primary)',
-          }}>
-            ${currentPrice.toFixed(2)}
-          </div>
-          <div style={{
-            fontFamily: 'var(--font-mono)', fontSize: '12px',
-            color: isUp ? 'var(--neon-green)' : 'var(--neon-pink)',
-          }}>
-            {isUp ? '▲' : '▼'} {Math.abs(totalChange).toFixed(2)}% session
+        <div style={{ textAlign:'right' }}>
+          <div style={{ fontFamily:'var(--fm)', fontSize:22, fontWeight:700, color:'var(--t1)' }}>${price.toFixed(2)}</div>
+          <div style={{ fontFamily:'var(--fm)', fontSize:10, color: up?'var(--g)':'var(--pink)' }}>
+            {up?'▲':'▼'} {Math.abs(sessPct).toFixed(2)}% session
           </div>
         </div>
       </div>
 
-      {/* Price chart */}
-      <div style={{ padding: '0 8px', height: '120px' }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-            <Line
-              type="monotone" dataKey="price"
-              stroke={isUp ? '#00ff88' : '#ff0088'}
-              strokeWidth={2} dot={false}
-              isAnimationActive={false}
-            />
-            <Tooltip content={<CustomTooltip />} />
-            <YAxis domain={['auto', 'auto']} hide />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
+      {/* Chart */}
+      {chartData.length > 1 && (
+        <div style={{ height:110, flexShrink:0 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chartData} margin={{ top:8, right:8, bottom:0, left:0 }}>
+              <Line type="monotone" dataKey="p" stroke={up?'#00ff88':'#ff0088'} strokeWidth={2} dot={false} isAnimationActive={false} />
+              <Tooltip content={<TT />} />
+              <YAxis domain={['auto','auto']} hide />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
       {/* Indicators */}
-      <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
-        gap: '6px', padding: '10px 14px',
-        borderTop: '1px solid rgba(0,212,255,0.08)',
-      }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:6, padding:'8px 14px', borderTop:'1px solid rgba(0,212,255,.07)', flexShrink:0 }}>
         {[
-          { label: 'RSI', value: indicators.rsi?.toFixed(0), color: indicators.rsi > 70 ? 'var(--neon-pink)' : indicators.rsi < 30 ? 'var(--neon-green)' : 'var(--neon-gold)' },
-          { label: 'MOM', value: `${indicators.momentum?.toFixed(1)}%`, color: (indicators.momentum || 0) >= 0 ? 'var(--neon-green)' : 'var(--neon-pink)' },
-          { label: 'VOL', value: `${((stock.volatility || 0) * 100).toFixed(1)}%`, color: 'var(--neon-cyan)' },
-        ].map(ind => (
-          <div key={ind.label} style={{
-            background: 'rgba(0,212,255,0.05)', borderRadius: '6px',
-            padding: '6px', textAlign: 'center',
-            border: '1px solid rgba(0,212,255,0.1)',
-          }}>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', marginBottom: '2px' }}>{ind.label}</div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: '700', color: ind.color }}>{ind.value}</div>
+          { l:'RSI',  v: ind.rsi != null ? ind.rsi.toFixed(0) : '…',        col: (ind.rsi||50)>70?'var(--pink)':(ind.rsi||50)<30?'var(--g)':'var(--gold)' },
+          { l:'MOM',  v: ind.momentum != null ? `${ind.momentum.toFixed(1)}%` : '…', col: (ind.momentum||0)>=0?'var(--g)':'var(--pink)' },
+          { l:'VOL',  v: s.volatility != null ? `${(s.volatility*100).toFixed(1)}%` : '…', col:'var(--c)' },
+        ].map(x => (
+          <div key={x.l} style={{ background:'rgba(0,212,255,.04)', border:'1px solid rgba(0,212,255,.08)', borderRadius:6, padding:'5px 8px', textAlign:'center' }}>
+            <div style={{ fontFamily:'var(--fm)', fontSize:8, color:'var(--t3)', marginBottom:2 }}>{x.l}</div>
+            <div style={{ fontFamily:'var(--fm)', fontSize:13, fontWeight:700, color:x.col }}>{x.v}</div>
           </div>
         ))}
       </div>
 
       {/* Holding info */}
       {holding && (
-        <div style={{
-          margin: '0 14px 10px',
-          padding: '8px 12px',
-          background: 'rgba(0,255,136,0.08)',
-          border: '1px solid rgba(0,255,136,0.25)',
-          borderRadius: '6px',
-          display: 'flex', justifyContent: 'space-between',
-        }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--neon-green)' }}>
-            📦 Holding: {holding.shares} shares
-          </span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-secondary)' }}>
-            Avg: ${holding.avgCost?.toFixed(2)}
-          </span>
+        <div style={{ margin:'0 14px 8px', padding:'7px 12px', background:'rgba(0,255,136,.07)', border:'1px solid rgba(0,255,136,.25)', borderRadius:7, display:'flex', justifyContent:'space-between', flexShrink:0 }}>
+          <span style={{ fontFamily:'var(--fm)', fontSize:10, color:'var(--g)' }}>📦 {holding.shares} shares held</span>
+          <span style={{ fontFamily:'var(--fm)', fontSize:10, color:'var(--t2)' }}>avg ${holding.avgCost?.toFixed(2)}</span>
         </div>
       )}
 
       {/* Trade controls */}
-      <div style={{ padding: '0 14px 14px' }}>
+      <div style={{ padding:'0 14px 14px', flexShrink:0 }}>
+
         {/* BUY / SELL tabs */}
-        <div style={{
-          display: 'grid', gridTemplateColumns: '1fr 1fr',
-          gap: '6px', marginBottom: '12px',
-        }}>
-          {['BUY', 'SELL'].map(m => (
-            <button
-              key={m}
-              onClick={() => setMode(m)}
-              style={{
-                padding: '10px',
-                background: mode === m
-                  ? m === 'BUY' ? 'rgba(0,255,136,0.2)' : 'rgba(255,0,136,0.2)'
-                  : 'rgba(5,18,40,0.6)',
-                border: mode === m
-                  ? `1px solid ${m === 'BUY' ? 'var(--neon-green)' : 'var(--neon-pink)'}`
-                  : '1px solid rgba(0,212,255,0.15)',
-                borderRadius: '6px',
-                color: mode === m
-                  ? m === 'BUY' ? 'var(--neon-green)' : 'var(--neon-pink)'
-                  : 'var(--text-muted)',
-                fontFamily: 'var(--font-display)',
-                fontSize: '13px', fontWeight: '700',
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-                boxShadow: mode === m
-                  ? `0 0 15px ${m === 'BUY' ? 'rgba(0,255,136,0.3)' : 'rgba(255,0,136,0.3)'}`
-                  : 'none',
-              }}
-            >
-              {m === 'BUY' ? '▲ BUY' : '▼ SELL'}
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginBottom:10 }}>
+          {['BUY','SELL'].map(m => (
+            <button key={m} onClick={() => setMode(m)} style={{
+              padding:10,
+              background: mode===m ? (m==='BUY'?'rgba(0,255,136,.2)':'rgba(255,0,136,.2)') : 'rgba(4,14,32,.7)',
+              border:`1px solid ${mode===m ? (m==='BUY'?'var(--g)':'var(--pink)') : 'var(--border)'}`,
+              borderRadius:7, fontFamily:'var(--fd)', fontSize:13, fontWeight:700,
+              color: mode===m ? (m==='BUY'?'var(--g)':'var(--pink)') : 'var(--t3)',
+              transition:'all .2s',
+            }}>
+              {m==='BUY'?'▲ BUY':'▼ SELL'}
             </button>
           ))}
         </div>
 
         {/* Shares input */}
-        <div style={{ marginBottom: '10px' }}>
-          <label style={{
-            fontFamily: 'var(--font-mono)', fontSize: '10px',
-            color: 'var(--text-muted)', display: 'block', marginBottom: '6px',
-          }}>
-            SHARES
-          </label>
-          <div style={{ display: 'flex', gap: '6px' }}>
-            <button onClick={() => setShares(s => Math.max(1, s - 1))} style={{
-              width: '36px', height: '36px',
-              background: 'rgba(0,212,255,0.1)',
-              border: '1px solid rgba(0,212,255,0.25)',
-              borderRadius: '6px', color: 'var(--neon-cyan)',
-              cursor: 'pointer', fontSize: '18px',
-            }}>−</button>
+        <div style={{ marginBottom:8 }}>
+          <div style={{ fontFamily:'var(--fm)', fontSize:9, color:'var(--t3)', marginBottom:5 }}>SHARES</div>
+          <div style={{ display:'flex', gap:6 }}>
+            <button onClick={() => setShares(s => Math.max(1, s-1))} style={{ width:34, height:34, background:'rgba(0,212,255,.1)', border:'1px solid rgba(0,212,255,.25)', borderRadius:6, color:'var(--c)', fontSize:18 }}>−</button>
             <input
-              type="number" min="1" value={shares}
+              type="number" min={1} value={shares}
               onChange={e => setShares(Math.max(1, parseInt(e.target.value) || 1))}
-              style={{
-                flex: 1, height: '36px',
-                background: 'rgba(5,18,40,0.8)',
-                border: '1px solid rgba(0,212,255,0.25)',
-                borderRadius: '6px', color: 'var(--text-primary)',
-                fontFamily: 'var(--font-mono)', fontSize: '14px',
-                textAlign: 'center', outline: 'none',
-              }}
+              style={{ flex:1, height:34, background:'rgba(4,14,32,.9)', border:'1px solid rgba(0,212,255,.25)', borderRadius:6, color:'var(--t1)', fontFamily:'var(--fm)', fontSize:14, textAlign:'center' }}
             />
-            <button onClick={() => setShares(s => s + 1)} style={{
-              width: '36px', height: '36px',
-              background: 'rgba(0,212,255,0.1)',
-              border: '1px solid rgba(0,212,255,0.25)',
-              borderRadius: '6px', color: 'var(--neon-cyan)',
-              cursor: 'pointer', fontSize: '18px',
-            }}>+</button>
+            <button onClick={() => setShares(s => s+1)} style={{ width:34, height:34, background:'rgba(0,212,255,.1)', border:'1px solid rgba(0,212,255,.25)', borderRadius:6, color:'var(--c)', fontSize:18 }}>+</button>
           </div>
-          
-          {/* Quick amounts */}
-          <div style={{ display: 'flex', gap: '4px', marginTop: '6px' }}>
-            {[1, 5, 10, 25].map(n => (
+          <div style={{ display:'flex', gap:4, marginTop:5 }}>
+            {[1,5,10,25].map(n => (
               <button key={n} onClick={() => setShares(n)} style={{
-                flex: 1, padding: '4px',
-                background: shares === n ? 'rgba(0,212,255,0.15)' : 'rgba(5,18,40,0.6)',
-                border: `1px solid ${shares === n ? 'var(--neon-cyan)' : 'rgba(0,212,255,0.12)'}`,
-                borderRadius: '4px', color: shares === n ? 'var(--neon-cyan)' : 'var(--text-muted)',
-                fontFamily: 'var(--font-mono)', fontSize: '10px', cursor: 'pointer',
-              }}>
-                {n}
-              </button>
+                flex:1, padding:'3px 0',
+                background: shares===n ? 'rgba(0,212,255,.15)' : 'rgba(4,14,32,.7)',
+                border:`1px solid ${shares===n ? 'var(--c)' : 'rgba(0,212,255,.12)'}`,
+                borderRadius:4, color: shares===n ? 'var(--c)' : 'var(--t3)',
+                fontFamily:'var(--fm)', fontSize:9,
+              }}>{n}</button>
             ))}
           </div>
         </div>
 
-        {/* Cost estimate */}
-        <div style={{
-          padding: '8px 12px', marginBottom: '10px',
-          background: 'rgba(0,212,255,0.05)',
-          border: '1px solid rgba(0,212,255,0.1)',
-          borderRadius: '6px',
-          display: 'flex', justifyContent: 'space-between',
-        }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)' }}>
-            {mode === 'BUY' ? 'COST' : 'PROCEEDS'}
-          </span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--neon-cyan)' }}>
-            ${costEstimate.toFixed(2)}
-          </span>
+        {/* Cost display */}
+        <div style={{ padding:'7px 12px', marginBottom:8, background:'rgba(0,212,255,.04)', border:'1px solid rgba(0,212,255,.1)', borderRadius:6, display:'flex', justifyContent:'space-between' }}>
+          <span style={{ fontFamily:'var(--fm)', fontSize:10, color:'var(--t3)' }}>{mode==='BUY'?'COST':'PROCEEDS'}</span>
+          <span style={{ fontFamily:'var(--fm)', fontSize:10, color:'var(--c)' }}>${cost.toFixed(2)}</span>
         </div>
 
-        {/* Result message */}
-        {resultMsg && (
+        {/* Flash result message */}
+        {flash && (
           <div style={{
-            padding: '8px 12px', marginBottom: '8px',
-            background: resultMsg.success ? 'rgba(0,255,136,0.1)' : 'rgba(255,0,136,0.1)',
-            border: `1px solid ${resultMsg.success ? 'rgba(0,255,136,0.3)' : 'rgba(255,0,136,0.3)'}`,
-            borderRadius: '6px',
-            fontFamily: 'var(--font-mono)', fontSize: '11px',
-            color: resultMsg.success ? 'var(--neon-green)' : 'var(--neon-pink)',
-            animation: 'fadeIn 0.3s ease',
+            padding:'7px 12px', marginBottom:8,
+            background: flash.success ? 'rgba(0,255,136,.1)' : 'rgba(255,0,136,.1)',
+            border:`1px solid ${flash.success ? 'rgba(0,255,136,.35)' : 'rgba(255,0,136,.35)'}`,
+            borderRadius:6, fontFamily:'var(--fm)', fontSize:10,
+            color: flash.success ? 'var(--g)' : 'var(--pink)',
           }}>
-            {resultMsg.success ? '✓ ' : '✗ '}{resultMsg.message || (resultMsg.success ? 'Trade executed!' : 'Trade failed')}
+            {flash.message}
           </div>
         )}
 
         {/* Execute button */}
         <button
-          onClick={handleTrade}
+          onClick={mode === 'BUY' ? handleBuy : handleSell}
           disabled={mode === 'BUY' ? !canBuy : !canSell}
           style={{
-            width: '100%', padding: '14px',
-            background: mode === 'BUY'
-              ? canBuy ? 'linear-gradient(135deg, rgba(0,255,136,0.25), rgba(0,200,100,0.15))' : 'rgba(5,18,40,0.6)'
-              : canSell ? 'linear-gradient(135deg, rgba(255,0,136,0.25), rgba(200,0,100,0.15))' : 'rgba(5,18,40,0.6)',
-            border: mode === 'BUY'
-              ? `1px solid ${canBuy ? 'var(--neon-green)' : 'rgba(0,212,255,0.15)'}`
-              : `1px solid ${canSell ? 'var(--neon-pink)' : 'rgba(0,212,255,0.15)'}`,
-            borderRadius: '8px',
-            color: mode === 'BUY'
-              ? canBuy ? 'var(--neon-green)' : 'var(--text-muted)'
-              : canSell ? 'var(--neon-pink)' : 'var(--text-muted)',
-            fontFamily: 'var(--font-display)',
-            fontSize: '14px', fontWeight: '700',
-            cursor: (mode === 'BUY' ? canBuy : canSell) ? 'pointer' : 'not-allowed',
-            letterSpacing: '0.1em',
-            boxShadow: (mode === 'BUY' && canBuy)
-              ? '0 0 20px rgba(0,255,136,0.3)'
-              : (mode === 'SELL' && canSell) ? '0 0 20px rgba(255,0,136,0.3)' : 'none',
-            transition: 'all 0.25s',
-          }}
-        >
-          {mode === 'BUY' ? `▲ BUY ${shares} ${selectedStock}` : `▼ SELL ${shares} ${selectedStock}`}
+            width:'100%', padding:14, borderRadius:8,
+            fontFamily:'var(--fd)', fontSize:13, fontWeight:700, letterSpacing:'.1em',
+            background: mode==='BUY'
+              ? (canBuy  ? 'linear-gradient(135deg,rgba(0,255,136,.25),rgba(0,200,100,.15))' : 'rgba(4,14,32,.7)')
+              : (canSell ? 'linear-gradient(135deg,rgba(255,0,136,.25),rgba(200,0,80,.15))'  : 'rgba(4,14,32,.7)'),
+            border: mode==='BUY'
+              ? `1px solid ${canBuy  ? 'var(--g)'    : 'var(--border)'}`
+              : `1px solid ${canSell ? 'var(--pink)' : 'var(--border)'}`,
+            color: mode==='BUY'
+              ? (canBuy  ? 'var(--g)'    : 'var(--t3)')
+              : (canSell ? 'var(--pink)' : 'var(--t3)'),
+            cursor: (mode==='BUY' ? canBuy : canSell) ? 'pointer' : 'not-allowed',
+            transition:'all .22s',
+          }}>
+          {mode==='BUY' ? `▲ BUY ${shares} ${ticker}` : `▼ SELL ${shares} ${ticker}`}
         </button>
-        
-        <div style={{
-          marginTop: '6px', textAlign: 'right',
-          fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)',
-        }}>
+
+        <div style={{ marginTop:5, textAlign:'right', fontFamily:'var(--fm)', fontSize:9, color:'var(--t3)' }}>
           Cash: ${cash.toFixed(2)}
         </div>
       </div>

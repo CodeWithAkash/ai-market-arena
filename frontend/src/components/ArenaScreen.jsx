@@ -91,8 +91,13 @@ export default function ArenaScreen({ selectedAgents, startingCash = 10000, onEx
     onGameOver: s => { setFinalState(s); setGameOver(true); },
   });
 
-  const handleBuy  = useCallback((t, s) => sendBuy(t, s),  [sendBuy]);
-  const handleSell = useCallback((t, s) => sendSell(t, s), [sendSell]);
+  const handleBuy  = useCallback((ticker, shares) => {
+    if (typeof sendBuy === 'function') sendBuy(ticker, shares);
+  }, [sendBuy]);
+
+  const handleSell = useCallback((ticker, shares) => {
+    if (typeof sendSell === 'function') sendSell(ticker, shares);
+  }, [sendSell]);
 
   if (gameOver && finalState) {
     return <GameOverScreen gameState={finalState} onPlayAgain={onExit} />;
@@ -154,6 +159,8 @@ export default function ArenaScreen({ selectedAgents, startingCash = 10000, onEx
         gap: 8, padding: 8, overflow: 'hidden',
         position: 'relative', zIndex: 10,
       }}>
+
+        {/* LEFT — stock list */}
         <StockPanel
           marketData={marketData}
           selected={selected}
@@ -161,6 +168,7 @@ export default function ArenaScreen({ selectedAgents, startingCash = 10000, onEx
           portfolio={player.portfolio || {}}
         />
 
+        {/* CENTER — trade panel + feeds */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, overflow: 'hidden' }}>
           <TradePanel
             ticker={selected}
@@ -172,10 +180,11 @@ export default function ArenaScreen({ selectedAgents, startingCash = 10000, onEx
           />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, flex: 1, minHeight: 0 }}>
             <EventFeed events={eventLog} />
-            <TradeFeed  trades={tradeFeed} />
+            <TradeFeed trades={tradeFeed} />
           </div>
         </div>
 
+        {/* RIGHT — leaderboard + portfolio */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, overflow: 'hidden' }}>
           <LeaderboardPanel leaderboard={leaderboard} startingCash={startingCash} />
 
