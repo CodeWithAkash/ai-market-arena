@@ -11,45 +11,32 @@ function HUD({ tick, maxTicks, pv, start, connected, latency }) {
   const pct = start > 0 ? (pnl / start) * 100 : 0;
   const up  = pnl >= 0;
   const hot = progress > 75;
-
   return (
-    <div style={{
-      position:'sticky', top:0, zIndex:200,
-      padding:'10px 20px',
-      background:'rgba(13,17,23,.97)',
-      backdropFilter:'blur(20px)',
-      borderBottom:'1px solid rgba(255,255,255,.07)',
-      display:'flex', alignItems:'center', gap:16, flexShrink:0,
-    }}>
-      <div style={{ fontFamily:'var(--fd)', fontSize:12, fontWeight:900, whiteSpace:'nowrap', background:'linear-gradient(135deg,#0aafe6,#00c96e)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text' }}>
+    <div style={{position:'sticky',top:0,zIndex:200,padding:'11px 22px',background:'rgba(0,29,57,.97)',backdropFilter:'blur(24px)',borderBottom:'1px solid rgba(123,189,232,.1)',display:'flex',alignItems:'center',gap:18}}>
+      <div style={{fontFamily:'var(--fd)',fontSize:12,fontWeight:900,whiteSpace:'nowrap',letterSpacing:'.06em',background:'linear-gradient(135deg,var(--sky),var(--teal))',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text'}}>
         AI MARKET ARENA
       </div>
-
-      <div style={{ display:'flex', alignItems:'center', gap:5, flexShrink:0 }}>
-        <div style={{ width:6, height:6, borderRadius:'50%', background: connected?'var(--g)':'var(--pink)', boxShadow:`0 0 8px ${connected?'var(--g)':'var(--pink)'}`, animation:'pulse 2s infinite' }} />
-        <span style={{ fontFamily:'var(--fm)', fontSize:9, color: connected?'var(--g)':'var(--pink)' }}>
-          {connected ? (latency ? `${latency}ms` : 'LIVE') : 'RECONNECTING'}
+      <div style={{display:'flex',alignItems:'center',gap:6}}>
+        <div style={{width:7,height:7,borderRadius:'50%',background:connected?'var(--g)':'var(--pink)',boxShadow:`0 0 8px ${connected?'var(--g)':'var(--pink)'}`,animation:'pulse 2s infinite'}}/>
+        <span style={{fontFamily:'var(--fm)',fontSize:9,fontWeight:600,color:connected?'var(--g)':'var(--pink)'}}>
+          {connected?(latency?`${latency}ms`:'LIVE'):'RECONNECTING'}
         </span>
       </div>
-
-      <div style={{ flex:1 }}>
-        <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
-          <span style={{ fontFamily:'var(--fm)', fontSize:9, color:'rgba(255,255,255,.35)' }}>TICK {tick}/{maxTicks}</span>
-          <span style={{ fontFamily:'var(--fm)', fontSize:9, color: hot?'var(--ora)':'rgba(255,255,255,.35)' }}>
-            {(100-progress).toFixed(0)}% LEFT
-          </span>
+      <div style={{flex:1}}>
+        <div style={{display:'flex',justifyContent:'space-between',marginBottom:5}}>
+          <span style={{fontFamily:'var(--fm)',fontSize:9,color:'var(--t4)'}}>TICK {tick} / {maxTicks}</span>
+          <span style={{fontFamily:'var(--fm)',fontSize:9,color:hot?'var(--ora)':'var(--t4)'}}>{(100-progress).toFixed(0)}% LEFT</span>
         </div>
-        <div style={{ height:4, background:'rgba(255,255,255,.08)', borderRadius:4, overflow:'hidden' }}>
-          <div style={{ height:'100%', width:`${progress}%`, borderRadius:4, transition:'width .6s ease', background: hot?'linear-gradient(90deg,#ff7d3b,#f0436a)':'linear-gradient(90deg,#0aafe6,#00c96e)' }} />
+        <div style={{height:5,background:'rgba(123,189,232,.1)',borderRadius:4,overflow:'hidden'}}>
+          <div style={{height:'100%',width:`${progress}%`,borderRadius:4,transition:'width .6s ease',background:hot?'linear-gradient(90deg,var(--ora),var(--pink))':'linear-gradient(90deg,var(--sky),var(--g))'}}/>
         </div>
       </div>
-
-      <div style={{ textAlign:'right', flexShrink:0 }}>
-        <div style={{ fontFamily:'var(--fd)', fontSize:18, fontWeight:800, color: up?'#00c96e':'#f0436a', textShadow:`0 0 20px ${up?'rgba(0,201,110,.4)':'rgba(240,67,106,.4)'}` }}>
-          ${pv?.toLocaleString('en', { maximumFractionDigits:0 })}
+      <div style={{textAlign:'right'}}>
+        <div style={{fontFamily:'var(--fm)',fontSize:20,fontWeight:700,color:up?'var(--g)':'var(--pink)',textShadow:`0 0 18px ${up?'rgba(61,232,154,.4)':'rgba(255,92,122,.4)'}`}}>
+          ${pv?.toLocaleString('en',{maximumFractionDigits:0})}
         </div>
-        <div style={{ fontFamily:'var(--fm)', fontSize:9, color: up?'rgba(0,201,110,.8)':'rgba(240,67,106,.8)' }}>
-          {up?'▲':'▼'} {Math.abs(pct).toFixed(2)}%&nbsp;&nbsp;{up?'+':'-'}${Math.abs(pnl).toFixed(0)}
+        <div style={{fontFamily:'var(--fm)',fontSize:9,color:up?'rgba(61,232,154,.75)':'rgba(255,92,122,.75)'}}>
+          {up?'▲':'▼'} {Math.abs(pct).toFixed(2)}% &nbsp; {up?'+':'-'}${Math.abs(pnl).toFixed(0)}
         </div>
       </div>
     </div>
@@ -57,129 +44,92 @@ function HUD({ tick, maxTicks, pv, start, connected, latency }) {
 }
 
 const BOT_INFO = {
-  MomentumBot: {
-    emoji:'📈', color:'#00c96e',
-    rules: [
-      'BUY when RSI < 40 AND MA5 > MA20 (golden cross)',
-      'SELL when RSI > 65 OR momentum turns negative',
-      'Skip trade if volatility > 2%',
-    ],
-    tip: "Watch for RSI bouncing off 40 — that's its trigger.",
-  },
-  ValueBot: {
-    emoji:'🔍', color:'#0aafe6',
-    rules: [
-      'BUY when price is >3% below MA20 AND RSI < 35',
-      'SELL when price recovers to MA20 (fair value)',
-      'Max position: 30% of portfolio per stock',
-    ],
-    tip: 'It hunts stocks that have dipped hard. RSI < 35 is key.',
-  },
-  RiskBot: {
-    emoji:'🛡️', color:'#f5a623',
-    rules: [
-      'HARD stop-loss: sells if position down >5%',
-      'Profit lock: takes profit at +8%',
-      'Refuses all trades when volatility > 3%',
-    ],
-    tip: 'Notice how it avoids volatile ticks entirely.',
-  },
-  RandomBot: {
-    emoji:'🎲', color:'#f0436a',
-    rules: [
-      '50% chance to BUY or SELL any stock each tick',
-      'Random share size between 1–10',
-      'No indicators used — pure noise',
-    ],
-    tip: "The baseline. If you can't beat this, revisit your strategy.",
-  },
-  RLBot: {
-    emoji:'🤖', color:'#9b6bff',
-    rules: [
-      'Q-Learning: learns state→action→reward each tick',
-      'ε=0.15 exploration rate (tries random 15% of time)',
-      'Gets stronger as the game progresses',
-    ],
-    tip: "Watch it improve — early game it's random, late game it's sharp.",
-  },
+  MomentumBot:{ emoji:'📈', color:'#7BBDE8',
+    rules:['BUY when RSI < 40 AND MA5 > MA20 (golden cross)','SELL when RSI > 65 OR momentum turns negative','Skip trade if volatility > 2%'],
+    tip:"Watch RSI bounce off 40 — that's its exact trigger zone." },
+  ValueBot:   { emoji:'🔍', color:'#4E8EA2',
+    rules:['BUY when price is >3% below MA20 AND RSI < 35','SELL when price recovers to MA20 (fair value)','Max 30% of portfolio per stock'],
+    tip:'It hunts hard dips. RSI < 35 is the confirmation signal.' },
+  RiskBot:    { emoji:'🛡️', color:'#6EA2B3',
+    rules:['HARD stop-loss: sells if any position drops >5%','Profit lock: exits positions at +8% gain','Refuses all trades when volatility > 3%'],
+    tip:'Watch how it skips entire volatile ticks — that IS the strategy.' },
+  RandomBot:  { emoji:'🎲', color:'#BDD8E9',
+    rules:['50/50 chance to BUY or SELL any stock each tick','Random 1–10 share size per trade','Zero indicators — pure noise'],
+    tip:"The baseline. Can't beat this consistently? Revisit your approach." },
+  RLBot:      { emoji:'🤖', color:'#49769F',
+    rules:['Q-table maps (state, action) → expected reward','ε=0.15: explores random actions 15%, exploits best 85%','Reward = portfolio Δvalue per tick (γ=0.95 discount)'],
+    tip:'Early game = random. Late game = sharp. Watch it evolve in real time.' },
 };
 
 function BotStrategyPanel({ leaderboard, tradeFeed }) {
   const [activeBot, setActiveBot] = useState(null);
-  const bots  = leaderboard.filter(e => !e.isPlayer);
-  const info  = activeBot ? BOT_INFO[activeBot] : null;
+  const bots = leaderboard.filter(e => !e.isPlayer);
+  const info = activeBot ? BOT_INFO[activeBot] : null;
   const botTrades = activeBot ? tradeFeed.filter(t => t.agent === activeBot).slice(0, 6) : [];
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-
-      <div style={{ background:'rgba(22,27,36,.95)', borderRadius:14, border:'1px solid rgba(255,255,255,.07)', overflow:'hidden' }}>
-        <div style={{ padding:'12px 14px', borderBottom:'1px solid rgba(255,255,255,.06)' }}>
-          <div style={{ fontSize:11, fontWeight:700, color:'rgba(255,255,255,.5)', letterSpacing:'.1em', textTransform:'uppercase' }}>🤖 Bot Strategies</div>
-          <div style={{ fontSize:10, color:'rgba(255,255,255,.25)', marginTop:2 }}>Tap a bot to see its logic live</div>
+    <div style={{display:'flex',flexDirection:'column',gap:10}}>
+      <div style={{background:'linear-gradient(160deg,rgba(10,65,116,.95),rgba(0,29,57,.92))',borderRadius:16,border:'1px solid rgba(123,189,232,.1)',overflow:'hidden'}}>
+        <div style={{padding:'13px 16px',borderBottom:'1px solid rgba(123,189,232,.07)'}}>
+          <div style={{fontFamily:'var(--fd)',fontSize:10,fontWeight:800,color:'var(--t3)',letterSpacing:'.12em',textTransform:'uppercase'}}>🤖 Bot Strategies</div>
+          <div style={{fontSize:10,color:'var(--t4)',marginTop:2,fontWeight:500}}>Tap to reveal live decision logic</div>
         </div>
         {bots.map(bot => {
           const bi = BOT_INFO[bot.name];
-          const isActive = activeBot === bot.name;
-          const up = (bot.changePercent || 0) >= 0;
-          const rank = leaderboard.findIndex(e => e.name === bot.name) + 1;
+          const active = activeBot === bot.name;
+          const up = (bot.changePercent||0) >= 0;
+          const rank = leaderboard.findIndex(e=>e.name===bot.name)+1;
           return (
-            <div key={bot.name} onClick={() => setActiveBot(isActive ? null : bot.name)}
-              style={{
-                padding:'10px 14px', cursor:'pointer',
-                background: isActive ? `${bi?.color}18` : 'transparent',
-                borderLeft: isActive ? `3px solid ${bi?.color}` : '3px solid transparent',
-                borderBottom:'1px solid rgba(255,255,255,.04)',
-                display:'flex', alignItems:'center', gap:10, transition:'all .15s',
-              }}>
-              <span style={{ fontSize:18 }}>{bi?.emoji || '🤖'}</span>
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontSize:12, fontWeight:700, color: isActive ? bi?.color : 'rgba(255,255,255,.8)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{bot.name}</div>
-                <div style={{ fontSize:9, color:'rgba(255,255,255,.3)' }}>Rank #{rank}</div>
+            <div key={bot.name} onClick={()=>setActiveBot(active?null:bot.name)}
+              style={{padding:'11px 16px',cursor:'pointer',background:active?`linear-gradient(135deg,${bi?.colorSoft||'rgba(123,189,232,.1)'},rgba(0,29,57,.5))`:'transparent',borderLeft:`3px solid ${active?bi?.color||'var(--sky)':'transparent'}`,borderBottom:'1px solid rgba(123,189,232,.05)',display:'flex',alignItems:'center',gap:10,transition:'all .15s'}}>
+              <span style={{fontSize:18}}>{bi?.emoji||'🤖'}</span>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:12,fontWeight:700,color:active?bi?.color:'var(--t2)',fontFamily:'var(--fd)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{bot.name}</div>
+                <div style={{fontSize:9,color:'var(--t4)',fontWeight:500}}>Rank #{rank}</div>
               </div>
-              <div style={{ textAlign:'right', flexShrink:0 }}>
-                <div style={{ fontSize:12, fontWeight:700, color:'rgba(255,255,255,.8)' }}>${bot.value?.toLocaleString('en',{maximumFractionDigits:0})}</div>
-                <div style={{ fontSize:9, color: up?'#00c96e':'#f0436a' }}>{up?'▲':'▼'}{Math.abs(bot.changePercent||0).toFixed(1)}%</div>
+              <div style={{textAlign:'right',flexShrink:0}}>
+                <div style={{fontFamily:'var(--fm)',fontSize:12,fontWeight:700,color:'var(--t1)'}}>${bot.value?.toLocaleString('en',{maximumFractionDigits:0})}</div>
+                <div style={{fontSize:9,color:up?'var(--g)':'var(--pink)',fontFamily:'var(--fm)'}}>{up?'▲':'▼'}{Math.abs(bot.changePercent||0).toFixed(1)}%</div>
               </div>
-              <span style={{ fontSize:9, color:'rgba(255,255,255,.2)', flexShrink:0 }}>{isActive?'▲':'▼'}</span>
+              <span style={{fontSize:9,color:'var(--t4)',flexShrink:0}}>{active?'▲':'▼'}</span>
             </div>
           );
         })}
       </div>
 
       {activeBot && info && (
-        <div style={{ background:'rgba(22,27,36,.95)', borderRadius:14, border:`1px solid ${info.color}30`, overflow:'hidden', animation:'fadeUp .2s ease' }}>
-          <div style={{ padding:'12px 14px', background:`${info.color}12`, borderBottom:`1px solid ${info.color}20`, display:'flex', alignItems:'center', gap:8 }}>
-            <span style={{ fontSize:18 }}>{info.emoji}</span>
+        <div style={{background:'linear-gradient(160deg,rgba(10,65,116,.95),rgba(0,29,57,.92))',borderRadius:16,border:`1px solid ${info.color}40`,overflow:'hidden',animation:'fadeUp .2s ease'}}>
+          <div style={{padding:'13px 16px',background:`${info.color}15`,borderBottom:`1px solid ${info.color}20`,display:'flex',alignItems:'center',gap:9}}>
+            <span style={{fontSize:20}}>{info.emoji}</span>
             <div>
-              <div style={{ fontSize:13, fontWeight:700, color:info.color }}>{activeBot}</div>
-              <div style={{ fontSize:10, color:'rgba(255,255,255,.4)' }}>Decision Rules</div>
+              <div style={{fontFamily:'var(--fd)',fontSize:13,fontWeight:800,color:info.color}}>{activeBot}</div>
+              <div style={{fontSize:10,color:'var(--t4)',fontWeight:500}}>Live Decision Rules</div>
             </div>
           </div>
-          <div style={{ padding:'12px 14px' }}>
-            <div style={{ display:'flex', flexDirection:'column', gap:7, marginBottom:12 }}>
-              {info.rules.map((r, i) => (
-                <div key={i} style={{ display:'flex', gap:8 }}>
-                  <span style={{ fontSize:9, fontWeight:700, color:info.color, marginTop:2, flexShrink:0 }}>#{i+1}</span>
-                  <span style={{ fontSize:11, color:'rgba(255,255,255,.6)', lineHeight:1.5 }}>{r}</span>
+          <div style={{padding:'14px 16px'}}>
+            <div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:12}}>
+              {info.rules.map((r,i)=>(
+                <div key={i} style={{display:'flex',gap:9,alignItems:'flex-start'}}>
+                  <span style={{fontFamily:'var(--fm)',fontSize:9,fontWeight:700,color:info.color,marginTop:2,flexShrink:0,background:`${info.color}20`,padding:'2px 6px',borderRadius:5}}>#{i+1}</span>
+                  <span style={{fontSize:11,color:'var(--t3)',lineHeight:1.55,fontWeight:400}}>{r}</span>
                 </div>
               ))}
             </div>
-            <div style={{ padding:'9px 12px', background:'rgba(255,255,255,.04)', borderRadius:9, border:'1px solid rgba(255,255,255,.06)' }}>
-              <span style={{ fontSize:10, color:'rgba(255,255,255,.4)' }}>💡 <span style={{ color:'rgba(255,255,255,.65)' }}>{info.tip}</span></span>
+            <div style={{padding:'10px 13px',background:'rgba(0,29,57,.5)',borderRadius:10,border:'1px solid rgba(123,189,232,.08)'}}>
+              <span style={{fontSize:11,color:'var(--t4)'}}>💡 <span style={{color:'var(--t2)'}}>{info.tip}</span></span>
             </div>
           </div>
           {botTrades.length > 0 && (
-            <div style={{ borderTop:'1px solid rgba(255,255,255,.05)', padding:'10px 14px' }}>
-              <div style={{ fontSize:10, fontWeight:600, color:'rgba(255,255,255,.3)', letterSpacing:'.08em', textTransform:'uppercase', marginBottom:8 }}>Recent Trades</div>
-              <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
-                {botTrades.map((t, i) => {
-                  const isBuy = t.type === 'BUY';
-                  return (
-                    <div key={i} style={{ display:'flex', gap:8, alignItems:'center' }}>
-                      <span style={{ fontSize:9, fontWeight:700, padding:'2px 6px', borderRadius:4, background: isBuy?'rgba(0,201,110,.2)':'rgba(240,67,106,.2)', color: isBuy?'#00c96e':'#f0436a' }}>{t.type}</span>
-                      <span style={{ fontSize:10, color:'rgba(255,255,255,.6)' }}>{t.shares}× {t.ticker}</span>
-                      <span style={{ fontSize:10, color:'rgba(255,255,255,.3)', marginLeft:'auto' }}>${t.price?.toFixed(2)}</span>
+            <div style={{borderTop:'1px solid rgba(123,189,232,.07)',padding:'11px 16px'}}>
+              <div style={{fontFamily:'var(--fd)',fontSize:9,fontWeight:700,color:'var(--t4)',letterSpacing:'.1em',textTransform:'uppercase',marginBottom:9}}>Recent Trades</div>
+              <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                {botTrades.map((t,i)=>{
+                  const buy=t.type==='BUY';
+                  return(
+                    <div key={i} style={{display:'flex',gap:8,alignItems:'center'}}>
+                      <span style={{fontFamily:'var(--fm)',fontSize:9,fontWeight:700,padding:'2px 7px',borderRadius:5,background:buy?'rgba(61,232,154,.15)':'rgba(255,92,122,.15)',color:buy?'var(--g)':'var(--pink)'}}>{t.type}</span>
+                      <span style={{fontSize:11,color:'var(--t2)',fontWeight:500}}>{t.shares}× {t.ticker}</span>
+                      <span style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--t4)',marginLeft:'auto',fontWeight:600}}>${t.price?.toFixed(2)}</span>
                     </div>
                   );
                 })}
@@ -188,94 +138,83 @@ function BotStrategyPanel({ leaderboard, tradeFeed }) {
           )}
         </div>
       )}
-
-      <LeaderboardPanel leaderboard={leaderboard} startingCash={10000} />
+      <LeaderboardPanel leaderboard={leaderboard} startingCash={10000}/>
     </div>
   );
 }
 
-export default function ArenaScreen({ selectedAgents, startingCash = 10000, onExit }) {
-  const [selected,   setSelected]   = useState('AAPL');
-  const [gameOver,   setGameOver]   = useState(false);
-  const [finalState, setFinalState] = useState(null);
+export default function ArenaScreen({ selectedAgents, startingCash=10000, onExit }) {
+  const [selected,setSelected]=useState('AAPL');
+  const [gameOver,setGameOver]=useState(false);
+  const [finalState,setFinalState]=useState(null);
 
-  const { connected, gameState, tradeResult, latency, sendBuy, sendSell } = useGameSocket({
-    selectedAgents, startingCash,
-    onGameOver: s => { setFinalState(s); setGameOver(true); },
+  const {connected,gameState,tradeResult,latency,sendBuy,sendSell}=useGameSocket({
+    selectedAgents,startingCash,
+    onGameOver:s=>{setFinalState(s);setGameOver(true);},
   });
 
-  const handleBuy  = useCallback((ticker, shares) => { if (typeof sendBuy  === 'function') sendBuy(ticker, shares);  }, [sendBuy]);
-  const handleSell = useCallback((ticker, shares) => { if (typeof sendSell === 'function') sendSell(ticker, shares); }, [sendSell]);
+  const handleBuy  = useCallback((tk,sh)=>{if(typeof sendBuy ==='function')sendBuy(tk,sh); },[sendBuy]);
+  const handleSell = useCallback((tk,sh)=>{if(typeof sendSell==='function')sendSell(tk,sh);},[sendSell]);
 
-  if (gameOver && finalState) return <GameOverScreen gameState={finalState} onPlayAgain={onExit} />;
+  if(gameOver&&finalState)return<GameOverScreen gameState={finalState} onPlayAgain={onExit}/>;
 
-  if (!gameState) return (
-    <div style={{ width:'100vw', height:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#0d1117', flexDirection:'column', gap:20 }}>
-      <div className="spinner" style={{ width:48, height:48 }} />
-      <div style={{ fontFamily:'var(--fd)', color:'var(--c)', fontSize:14, letterSpacing:'.2em' }}>
-        {connected ? 'INITIALIZING MARKET…' : 'CONNECTING…'}
-      </div>
-      <div style={{ fontFamily:'var(--fm)', color:'rgba(255,255,255,.3)', fontSize:11 }}>
-        {connected ? 'Waiting for first tick' : 'Establishing connection'}
-      </div>
-      {!connected && (
-        <div style={{ padding:'10px 20px', background:'rgba(245,166,35,.08)', border:'1px solid rgba(245,166,35,.3)', borderRadius:10, fontSize:11, color:'var(--gold)', textAlign:'center', maxWidth:320 }}>
+  if(!gameState)return(
+    <div style={{width:'100vw',height:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--navy)',flexDirection:'column',gap:22}}>
+      <div className="spinner" style={{width:50,height:50}}/>
+      <div style={{fontFamily:'var(--fd)',color:'var(--sky)',fontSize:14,letterSpacing:'.18em',fontWeight:700}}>{connected?'INITIALIZING MARKET…':'CONNECTING…'}</div>
+      <div style={{fontSize:12,color:'var(--t4)',fontWeight:500}}>{connected?'Server connected — waiting for first tick':'Establishing WebSocket connection'}</div>
+      {!connected&&(
+        <div style={{padding:'11px 22px',background:'rgba(245,200,66,.07)',border:'1px solid rgba(245,200,66,.25)',borderRadius:12,fontSize:12,color:'var(--gold)',textAlign:'center',maxWidth:340,fontWeight:500}}>
           ⚡ First visit? Render free tier wakes up in 20–30s
         </div>
       )}
     </div>
   );
 
-  const { marketData={}, leaderboard=[], player={}, tradeFeed=[], eventLog=[], tick=0, maxTicks=200 } = gameState;
+  const {marketData={},leaderboard=[],player={},tradeFeed=[],eventLog=[],tick=0,maxTicks=200}=gameState;
 
-  return (
-    <div style={{ minHeight:'100vh', background:'#0d1117', overflowX:'hidden', overflowY:'auto', display:'flex', flexDirection:'column' }}>
-      <HUD tick={tick} maxTicks={maxTicks} pv={player.totalValue||startingCash} start={startingCash} connected={connected} latency={latency} />
+  return(
+    <div style={{minHeight:'100vh',background:'var(--navy)',overflowX:'hidden',overflowY:'auto',display:'flex',flexDirection:'column'}}>
+      <HUD tick={tick} maxTicks={maxTicks} pv={player.totalValue||startingCash} start={startingCash} connected={connected} latency={latency}/>
+      <div style={{flex:1,display:'grid',gridTemplateColumns:'220px 1fr 280px',gap:10,padding:'10px 12px 24px',alignItems:'start'}}>
 
-      <div style={{ flex:1, display:'grid', gridTemplateColumns:'220px 1fr 280px', gap:10, padding:'10px 12px 20px', alignItems:'start' }}>
-
-        {/* LEFT */}
-        <div style={{ position:'sticky', top:58, maxHeight:'calc(100vh - 68px)', overflow:'hidden', display:'flex', flexDirection:'column' }}>
-          <StockPanel marketData={marketData} selected={selected} onSelect={setSelected} portfolio={player.portfolio||{}} />
+        <div style={{position:'sticky',top:58,maxHeight:'calc(100vh - 68px)',overflow:'hidden',display:'flex',flexDirection:'column'}}>
+          <StockPanel marketData={marketData} selected={selected} onSelect={setSelected} portfolio={player.portfolio||{}}/>
         </div>
 
-        {/* CENTER */}
-        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-          <TradePanel ticker={selected} marketData={marketData} player={player} onBuy={handleBuy} onSell={handleSell} tradeResult={tradeResult} />
+        <div style={{display:'flex',flexDirection:'column',gap:10}}>
+          <TradePanel ticker={selected} marketData={marketData} player={player} onBuy={handleBuy} onSell={handleSell} tradeResult={tradeResult}/>
 
-          {/* Portfolio strip */}
-          <div style={{ background:'rgba(22,27,36,.95)', borderRadius:14, border:'1px solid rgba(255,255,255,.07)', padding:'14px 16px' }}>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-              <span style={{ fontSize:12, fontWeight:700, color:'rgba(255,255,255,.6)' }}>💼 Your Portfolio</span>
-              <span style={{ fontFamily:'var(--fm)', fontSize:12, color:'var(--c)' }}>Cash: ${(player.cash||0).toLocaleString('en',{maximumFractionDigits:0})}</span>
+          <div style={{background:'linear-gradient(145deg,rgba(10,65,116,.9),rgba(0,29,57,.85))',borderRadius:14,border:'1px solid rgba(123,189,232,.1)',padding:'14px 18px'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+              <span style={{fontFamily:'var(--fd)',fontSize:11,fontWeight:700,color:'var(--t3)',letterSpacing:'.08em'}}>💼 YOUR PORTFOLIO</span>
+              <span style={{fontFamily:'var(--fm)',fontSize:12,fontWeight:600,color:'var(--sky)'}}>Cash: ${(player.cash||0).toLocaleString('en',{maximumFractionDigits:0})}</span>
             </div>
-            {Object.keys(player.portfolio||{}).length === 0 ? (
-              <div style={{ fontSize:11, color:'rgba(255,255,255,.2)', textAlign:'center', padding:'6px 0' }}>No positions — buy a stock to start</div>
-            ) : (
-              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                {Object.entries(player.portfolio).map(([tk, pos]) => {
-                  const price = marketData[tk]?.price || 0;
-                  const pct   = pos.avgCost > 0 ? ((price - pos.avgCost) / pos.avgCost) * 100 : 0;
-                  return (
-                    <div key={tk} onClick={() => setSelected(tk)} style={{ padding:'8px 12px', borderRadius:10, cursor:'pointer', background: pct>=0?'rgba(0,201,110,.12)':'rgba(240,67,106,.12)', border:`1px solid ${pct>=0?'rgba(0,201,110,.3)':'rgba(240,67,106,.3)'}` }}>
-                      <div style={{ fontSize:12, fontWeight:700, color:'rgba(255,255,255,.85)' }}>{tk}</div>
-                      <div style={{ fontSize:10, color: pct>=0?'#00c96e':'#f0436a' }}>{pos.shares}sh · {pct>=0?'+':''}{pct.toFixed(1)}%</div>
+            {Object.keys(player.portfolio||{}).length===0
+              ?<div style={{fontSize:12,color:'var(--t4)',textAlign:'center',padding:'8px 0',fontWeight:500}}>No positions — buy a stock to start</div>
+              :<div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                {Object.entries(player.portfolio).map(([tk,pos])=>{
+                  const price=marketData[tk]?.price||0;
+                  const pct=pos.avgCost>0?((price-pos.avgCost)/pos.avgCost)*100:0;
+                  return(
+                    <div key={tk} onClick={()=>setSelected(tk)} style={{padding:'9px 14px',borderRadius:11,cursor:'pointer',background:pct>=0?'rgba(61,232,154,.1)':'rgba(255,92,122,.1)',border:`1px solid ${pct>=0?'rgba(61,232,154,.25)':'rgba(255,92,122,.25)'}`}}>
+                      <div style={{fontFamily:'var(--fd)',fontSize:12,fontWeight:800,color:'var(--t1)'}}>{tk}</div>
+                      <div style={{fontFamily:'var(--fm)',fontSize:10,color:pct>=0?'var(--g)':'var(--pink)',marginTop:2}}>{pos.shares}sh · {pct>=0?'+':''}{pct.toFixed(1)}%</div>
                     </div>
                   );
                 })}
               </div>
-            )}
+            }
           </div>
 
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-            <EventFeed events={eventLog} />
-            <TradeFeed trades={tradeFeed} />
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+            <EventFeed events={eventLog}/>
+            <TradeFeed trades={tradeFeed}/>
           </div>
         </div>
 
-        {/* RIGHT */}
-        <div style={{ position:'sticky', top:58, maxHeight:'calc(100vh - 68px)', overflowY:'auto', display:'flex', flexDirection:'column' }} className="scroll">
-          <BotStrategyPanel leaderboard={leaderboard} tradeFeed={tradeFeed} />
+        <div style={{position:'sticky',top:58,maxHeight:'calc(100vh - 68px)',overflowY:'auto',display:'flex',flexDirection:'column'}} className="scroll">
+          <BotStrategyPanel leaderboard={leaderboard} tradeFeed={tradeFeed}/>
         </div>
       </div>
     </div>
