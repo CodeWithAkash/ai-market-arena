@@ -3,443 +3,240 @@ import ParticleField from './ParticleField';
 
 const AGENTS = [
   {
-    name: 'MomentumBot',
+    name: 'MomentumBot', color: '#00ff88', emoji: '📈',
     personality: 'Trend Following',
-    color: '#00ff88',
-    description: 'Rides market waves with ML momentum signals. Aggressive and fast.',
-    stats: { aggression: 85, intelligence: 70, speed: 90, risk: 75 },
-    icon: '📈',
-    strategy: 'RSI + Moving Avg + Trend ML',
+    desc: 'Rides market waves using RSI + moving-average crossovers. Aggressive on breakouts.',
+    strategy: 'MA crossover + momentum signal',
+    stats: { aggression:85, intelligence:70, speed:90, risk:75 },
   },
   {
-    name: 'ValueBot',
+    name: 'ValueBot', color: '#4488ff', emoji: '🔍',
     personality: 'Value Investing',
-    color: '#4488ff',
-    description: 'Hunts undervalued stocks with regression models. Patient but deadly.',
-    stats: { aggression: 40, intelligence: 90, speed: 35, risk: 30 },
-    icon: '🔍',
-    strategy: 'DCF + RSI Divergence',
+    desc: 'Hunts undervalued stocks via RSI divergence and deviation from fair value.',
+    strategy: 'RSI + 20-period MA regression',
+    stats: { aggression:38, intelligence:92, speed:32, risk:28 },
   },
   {
-    name: 'RiskBot',
+    name: 'RiskBot', color: '#ff8800', emoji: '🛡️',
     personality: 'Risk Averse',
-    color: '#ff8800',
-    description: 'Master of stop-losses and volatility hedging. Never loses big.',
-    stats: { aggression: 25, intelligence: 80, speed: 60, risk: 10 },
-    icon: '🛡️',
-    strategy: 'Volatility + Stop-Loss Engine',
+    desc: 'Defensive model with hard stop-losses, volatility filters, and profit-lock mechanisms.',
+    strategy: 'Stop-loss + volatility gating',
+    stats: { aggression:22, intelligence:80, speed:58, risk:8 },
   },
   {
-    name: 'RandomBot',
+    name: 'RandomBot', color: '#ff0088', emoji: '🎲',
     personality: 'Chaos Theory',
-    color: '#ff0088',
-    description: 'Pure chaos. Unpredictable. Sometimes genius, sometimes disaster.',
-    stats: { aggression: 100, intelligence: 10, speed: 100, risk: 100 },
-    icon: '🎲',
-    strategy: 'Brownian Motion YOLO',
+    desc: 'Pure Brownian motion YOLO. Totally unpredictable — sometimes brilliant, usually chaotic.',
+    strategy: 'Stochastic random walk',
+    stats: { aggression:100, intelligence:5, speed:100, risk:100 },
   },
   {
-    name: 'RLBot',
+    name: 'RLBot', color: '#cc44ff', emoji: '🤖',
     personality: 'Reinforcement Learning',
-    color: '#cc44ff',
-    description: 'Q-learning agent that evolves every game. Gets smarter each tick.',
-    stats: { aggression: 65, intelligence: 100, speed: 70, risk: 55 },
-    icon: '🤖',
-    strategy: 'Q-Learning ε-greedy Policy',
+    desc: 'Q-Learning agent with ε-greedy policy that learns and improves each tick.',
+    strategy: 'Q-table ε-greedy (γ=0.95)',
+    stats: { aggression:65, intelligence:100, speed:68, risk:52 },
   },
 ];
 
-function StatBar({ label, value, color }) {
+function Bar({ label, val, col }) {
   return (
-    <div style={{ marginBottom: '6px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'rgba(180,200,220,0.7)', marginBottom: '3px', fontFamily: 'var(--font-mono)' }}>
-        <span>{label}</span><span>{value}%</span>
+    <div style={{ marginBottom:5 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', fontSize:9, color:'var(--t3)', marginBottom:2, fontFamily:'var(--fm)' }}>
+        <span>{label}</span><span>{val}%</span>
       </div>
-      <div style={{ height: '4px', background: 'rgba(255,255,255,0.08)', borderRadius: '2px', overflow: 'hidden' }}>
-        <div style={{
-          height: '100%', width: `${value}%`, background: color,
-          boxShadow: `0 0 8px ${color}`,
-          transition: 'width 1s ease',
-          borderRadius: '2px',
-        }} />
+      <div style={{ height:3, background:'rgba(255,255,255,.07)', borderRadius:2, overflow:'hidden' }}>
+        <div style={{ height:'100%', width:`${val}%`, background:col, boxShadow:`0 0 8px ${col}`, borderRadius:2, transition:'width 1.2s ease' }} />
       </div>
     </div>
   );
 }
 
-export default function LandingScreen({ onStartGame }) {
-  const [selectedAgents, setSelectedAgents] = useState(['MomentumBot', 'ValueBot', 'RiskBot', 'RandomBot', 'RLBot']);
-  const [startingCash, setStartingCash] = useState(10000);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [hoveredAgent, setHoveredAgent] = useState(null);
-  const [titleGlitch, setTitleGlitch] = useState(false);
-  const [countdown, setCountdown] = useState(null);
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-  // Random glitch effect on title
+export default function LandingScreen({ onStart }) {
+  const [sel,     setSel]     = useState(new Set(['MomentumBot','ValueBot','RiskBot','RandomBot','RLBot']));
+  const [cash,    setCash]    = useState(10000);
+  const [loading, setLoading] = useState(false);
+  const [cd,      setCd]      = useState(null);
+  const [glitch,  setGlitch]  = useState(false);
+
   useEffect(() => {
     const t = setInterval(() => {
-      if (Math.random() > 0.85) {
-        setTitleGlitch(true);
-        setTimeout(() => setTitleGlitch(false), 200);
-      }
-    }, 2000);
+      if (Math.random() > .88) { setGlitch(true); setTimeout(() => setGlitch(false), 180); }
+    }, 2500);
     return () => clearInterval(t);
   }, []);
 
-  const toggleAgent = (name) => {
-    setSelectedAgents(prev =>
-      prev.includes(name) ? (prev.length > 1 ? prev.filter(a => a !== name) : prev) : [...prev, name]
-    );
-  };
+  const toggle = name => setSel(prev => {
+    const n = new Set(prev);
+    if (n.has(name) && n.size === 1) return n;
+    n.has(name) ? n.delete(name) : n.add(name);
+    return n;
+  });
 
   const handleStart = async () => {
-    if (selectedAgents.length === 0) return;
+    if (sel.size === 0) return;
     setLoading(true);
-    setError(null);
-    
-    // Countdown
-    for (let i = 3; i > 0; i--) {
-      setCountdown(i);
-      await new Promise(r => setTimeout(r, 600));
-    }
-    setCountdown('GO!');
-    await new Promise(r => setTimeout(r, 400));
-    
-    try {
-      const result = await createSession(selectedAgents, startingCash);
-      onStartGame(result.sessionId, result.state);
-    } catch (err) {
-      setError('Connection failed. Make sure the backend is running.');
-      setLoading(false);
-      setCountdown(null);
-    }
+    for (let i = 3; i > 0; i--) { setCd(i); await sleep(650); }
+    setCd('GO!'); await sleep(420);
+    onStart([...sel], cash);
   };
 
   return (
     <div style={{
-      width: '100vw', height: '100vh',
-      background: 'radial-gradient(ellipse at 20% 50%, rgba(0,40,80,0.5) 0%, var(--bg-deep) 60%), radial-gradient(ellipse at 80% 20%, rgba(0,80,40,0.3) 0%, transparent 50%)',
-      overflow: 'hidden',
-      position: 'relative',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-    }}>
-      <ParticleField intensity={1} />
-      
-      {/* Countdown overlay */}
-      {countdown && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 1000,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'rgba(1,2,8,0.8)',
-          backdropFilter: 'blur(4px)',
-        }}>
-          <div style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: '120px', fontWeight: '900',
-            color: countdown === 'GO!' ? 'var(--neon-green)' : 'var(--neon-cyan)',
-            textShadow: `0 0 60px ${countdown === 'GO!' ? 'var(--neon-green)' : 'var(--neon-cyan)'}`,
-            animation: 'pulse-neon 0.3s ease',
-          }}>
-            {countdown}
-          </div>
+      width:'100vw', height:'100vh', overflow:'auto', position:'relative',
+      background:'radial-gradient(ellipse at 20% 60%, rgba(0,40,80,.45) 0%, var(--bg0) 60%), radial-gradient(ellipse at 80% 15%, rgba(0,70,35,.3) 0%, transparent 55%)',
+    }} className="scroll">
+      <ParticleField count={65} />
+
+      {cd && (
+        <div style={{ position:'fixed', inset:0, zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(1,2,8,.85)', backdropFilter:'blur(6px)' }}>
+          <span style={{ fontFamily:'var(--fd)', fontSize:130, fontWeight:900, color:cd==='GO!'?'var(--g)':'var(--c)', textShadow:`0 0 80px ${cd==='GO!'?'var(--g)':'var(--c)'}` }}>{cd}</span>
         </div>
       )}
 
-      {/* Top HUD bar */}
-      <div style={{
-        width: '100%', padding: '12px 32px',
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        borderBottom: '1px solid rgba(0,212,255,0.15)',
-        zIndex: 10, position: 'relative',
-        background: 'rgba(1,2,8,0.5)',
-      }}>
-        <div style={{ fontFamily: 'var(--font-mono)', color: 'var(--neon-cyan)', fontSize: '12px' }}>
-          SYS: ARENA_v2.0 | STATUS: ONLINE | TICK: READY
-        </div>
-        <div style={{ fontFamily: 'var(--font-mono)', color: 'var(--neon-green)', fontSize: '12px' }}>
-          {new Date().toLocaleTimeString()} UTC | NASDAQ SIM
-        </div>
+      <div style={{ padding:'10px 28px', borderBottom:'1px solid rgba(0,212,255,.12)', display:'flex', justifyContent:'space-between', position:'relative', zIndex:10, background:'rgba(1,2,8,.6)' }}>
+        <span style={{ fontFamily:'var(--fm)', fontSize:11, color:'var(--c)' }}>SYS:ARENA_v3.0 · STATUS:ONLINE · NO LOGIN REQUIRED</span>
+        <span style={{ fontFamily:'var(--fm)', fontSize:11, color:'var(--g)' }}>{new Date().toLocaleTimeString()} · NASDAQ SIM</span>
       </div>
 
-      {/* Main content */}
-      <div style={{
-        flex: 1, width: '100%', maxWidth: '1400px',
-        padding: '20px 32px',
-        display: 'flex', flexDirection: 'column', alignItems: 'center',
-        gap: '24px', zIndex: 10, position: 'relative',
-        overflowY: 'auto',
-      }} className="scrollable">
-        
-        {/* Title */}
-        <div style={{ textAlign: 'center', marginBottom: '8px' }}>
-          <div style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: 'clamp(36px, 5vw, 72px)',
-            fontWeight: '900',
-            letterSpacing: '0.08em',
-            background: 'linear-gradient(135deg, #00d4ff 0%, #00ff88 50%, #ffd700 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-            animation: titleGlitch ? 'glitch 0.2s ease' : 'none',
-            filter: 'drop-shadow(0 0 30px rgba(0,212,255,0.5))',
-            lineHeight: 1.1,
-          }}>
-            AI MARKET ARENA
-          </div>
-          <div style={{
-            fontFamily: 'var(--font-mono)',
-            color: 'var(--text-secondary)',
-            fontSize: '14px',
-            letterSpacing: '0.3em',
-            marginTop: '8px',
-            textTransform: 'uppercase',
-          }}>
-            ⚔ Human vs Artificial Intelligence ⚔
-          </div>
-          <div style={{
-            fontFamily: 'var(--font-body)',
-            color: 'rgba(120,180,210,0.6)',
-            fontSize: '13px',
-            marginTop: '6px',
-          }}>
-            Compete against ML-powered trading agents in real-time market simulation
-          </div>
+      <div style={{ maxWidth:1300, margin:'0 auto', padding:'28px 28px 40px', position:'relative', zIndex:10 }}>
+
+        <div style={{ textAlign:'center', marginBottom:28 }}>
+          <h1 style={{
+            fontFamily:'var(--fd)', fontWeight:900,
+            fontSize:'clamp(34px,5vw,76px)', letterSpacing:'.08em',
+            background:'linear-gradient(135deg,#00d4ff 0%,#00ff88 50%,#ffd700 100%)',
+            WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text',
+            filter:'drop-shadow(0 0 28px rgba(0,212,255,.5))',
+            animation: glitch ? 'glitch .2s ease' : 'none',
+            lineHeight:1.05,
+          }}>AI MARKET ARENA</h1>
+          <p style={{ fontFamily:'var(--fm)', color:'var(--t3)', fontSize:13, letterSpacing:'.28em', marginTop:8 }}>
+            ⚔&nbsp; HUMAN VS ARTIFICIAL INTELLIGENCE &nbsp;⚔
+          </p>
+          <p style={{ color:'rgba(120,170,200,.55)', fontSize:12, marginTop:6 }}>
+            Compete against 5 ML-powered trading agents in real-time simulated stock market · No login required
+          </p>
         </div>
 
-        {/* Arena layout: agent selection + settings */}
-        <div style={{ display: 'flex', gap: '24px', width: '100%', alignItems: 'flex-start' }}>
-          
-          {/* Agent Selection */}
-          <div style={{ flex: 1 }}>
-            <div style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: '13px', letterSpacing: '0.2em',
-              color: 'var(--neon-cyan)', marginBottom: '14px',
-              display: 'flex', alignItems: 'center', gap: '10px',
-            }}>
-              <span style={{ fontSize: '20px' }}>⚔</span>
-              SELECT YOUR OPPONENTS
-              <span style={{
-                fontSize: '10px', color: 'var(--text-muted)',
-                fontFamily: 'var(--font-mono)', fontWeight: 'normal',
-              }}>({selectedAgents.length} selected)</span>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 280px', gap:20, alignItems:'start' }}>
+
+          <div>
+            <div style={{ fontFamily:'var(--fd)', fontSize:12, letterSpacing:'.2em', color:'var(--c)', marginBottom:14, display:'flex', alignItems:'center', gap:10 }}>
+              ⚔ SELECT YOUR OPPONENTS
+              <span style={{ fontFamily:'var(--fm)', fontSize:10, color:'var(--t3)', fontWeight:'normal' }}>({sel.size} selected)</span>
             </div>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '12px' }}>
-              {AGENTS.map(agent => {
-                const isSelected = selectedAgents.includes(agent.name);
-                const isHovered = hoveredAgent === agent.name;
-                
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))', gap:12 }}>
+              {AGENTS.map(a => {
+                const on = sel.has(a.name);
                 return (
-                  <div
-                    key={agent.name}
-                    onClick={() => toggleAgent(agent.name)}
-                    onMouseEnter={() => setHoveredAgent(agent.name)}
-                    onMouseLeave={() => setHoveredAgent(null)}
-                    className="glass-panel"
+                  <div key={a.name} onClick={() => toggle(a.name)} className="glass"
                     style={{
-                      padding: '16px',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      border: isSelected
-                        ? `1px solid ${agent.color}`
-                        : '1px solid rgba(0,212,255,0.15)',
-                      boxShadow: isSelected
-                        ? `0 0 20px ${agent.color}33, inset 0 0 20px ${agent.color}0a`
-                        : 'none',
-                      background: isSelected
-                        ? `rgba(${hexToRgb(agent.color)}, 0.08)`
-                        : 'rgba(5,18,40,0.6)',
-                      transition: 'all 0.25s ease',
-                      transform: isHovered ? 'translateY(-2px)' : 'none',
-                      position: 'relative',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    {/* Selected indicator */}
-                    {isSelected && (
-                      <div style={{
-                        position: 'absolute', top: '10px', right: '10px',
-                        width: '8px', height: '8px', borderRadius: '50%',
-                        background: agent.color,
-                        boxShadow: `0 0 10px ${agent.color}`,
-                        animation: 'pulse-neon 2s ease infinite',
-                      }} />
-                    )}
-                    
-                    {/* Agent header */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                      <span style={{ fontSize: '28px' }}>{agent.icon}</span>
+                      padding:16, borderRadius:10, cursor:'pointer',
+                      border:`1px solid ${on ? a.color : 'var(--border)'}`,
+                      background: on ? `rgba(0,0,0,.07)` : 'var(--panel)',
+                      boxShadow: on ? `0 0 22px ${a.color}22` : 'none',
+                      transition:'all .22s ease', position:'relative', overflow:'hidden',
+                    }}>
+                    {on && <div style={{ position:'absolute', top:10, right:10, width:8, height:8, borderRadius:'50%', background:a.color, boxShadow:`0 0 10px ${a.color}`, animation:'pulse 2s infinite' }} />}
+                    <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
+                      <span style={{ fontSize:26 }}>{a.emoji}</span>
                       <div>
-                        <div style={{
-                          fontFamily: 'var(--font-display)',
-                          fontSize: '14px', fontWeight: '700',
-                          color: isSelected ? agent.color : 'var(--text-primary)',
-                          textShadow: isSelected ? `0 0 15px ${agent.color}` : 'none',
-                        }}>
-                          {agent.name}
-                        </div>
-                        <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                          {agent.strategy}
-                        </div>
+                        <div style={{ fontFamily:'var(--fd)', fontSize:13, fontWeight:700, color: on ? a.color : 'var(--t1)', textShadow: on ? `0 0 14px ${a.color}` : 'none' }}>{a.name}</div>
+                        <div style={{ fontFamily:'var(--fm)', fontSize:9, color:'var(--t3)' }}>{a.strategy}</div>
                       </div>
                     </div>
-                    
-                    <div style={{ fontSize: '11px', color: 'rgba(160,200,220,0.7)', marginBottom: '12px', lineHeight: 1.5 }}>
-                      {agent.description}
-                    </div>
-                    
-                    {/* Stats */}
-                    <StatBar label="AGGRESSION" value={agent.stats.aggression} color={agent.color} />
-                    <StatBar label="INTELLIGENCE" value={agent.stats.intelligence} color={agent.color} />
-                    <StatBar label="SPEED" value={agent.stats.speed} color={agent.color} />
-                    <StatBar label="RISK LEVEL" value={agent.stats.risk} color={agent.color} />
+                    <p style={{ fontSize:11, color:'rgba(160,200,220,.7)', marginBottom:12, lineHeight:1.5 }}>{a.desc}</p>
+                    <Bar label="AGGRESSION"   val={a.stats.aggression}   col={a.color} />
+                    <Bar label="INTELLIGENCE" val={a.stats.intelligence} col={a.color} />
+                    <Bar label="SPEED"        val={a.stats.speed}        col={a.color} />
+                    <Bar label="RISK"         val={a.stats.risk}         col={a.color} />
                   </div>
                 );
               })}
             </div>
           </div>
 
-          {/* Right panel: Settings + Start */}
-          <div style={{ width: '280px', flexShrink: 0 }}>
-            <div className="glass-panel animated-border" style={{
-              borderRadius: '10px', padding: '24px',
-              display: 'flex', flexDirection: 'column', gap: '20px',
-            }}>
-              <div style={{
-                fontFamily: 'var(--font-display)',
-                fontSize: '13px', letterSpacing: '0.2em',
-                color: 'var(--neon-gold)',
-              }}>
-                ⚙ BATTLE CONFIG
-              </div>
-              
-              {/* Starting cash */}
-              <div>
-                <label style={{
-                  fontFamily: 'var(--font-mono)', fontSize: '11px',
-                  color: 'var(--text-secondary)', display: 'block', marginBottom: '8px',
-                }}>
-                  STARTING CAPITAL
-                </label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
-                  {[5000, 10000, 25000, 50000].map(amt => (
-                    <button
-                      key={amt}
-                      onClick={() => setStartingCash(amt)}
-                      style={{
-                        padding: '8px',
-                        background: startingCash === amt ? 'rgba(0,212,255,0.2)' : 'rgba(5,18,40,0.8)',
-                        border: `1px solid ${startingCash === amt ? 'var(--neon-cyan)' : 'rgba(0,212,255,0.2)'}`,
-                        borderRadius: '6px',
-                        color: startingCash === amt ? 'var(--neon-cyan)' : 'var(--text-secondary)',
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '12px',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                      }}
-                    >
-                      ${amt.toLocaleString()}
+          <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+            <div className="glass" style={{ borderRadius:10, padding:22, border:'1px solid rgba(255,215,0,.25)' }}>
+              <div style={{ fontFamily:'var(--fd)', fontSize:12, letterSpacing:'.2em', color:'var(--gold)', marginBottom:18 }}>⚙ BATTLE CONFIG</div>
+
+              <div style={{ marginBottom:18 }}>
+                <div style={{ fontFamily:'var(--fm)', fontSize:10, color:'var(--t2)', marginBottom:8 }}>STARTING CAPITAL</div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 }}>
+                  {[5000,10000,25000,50000].map(v => (
+                    <button key={v} onClick={() => setCash(v)} style={{
+                      padding:'8px 4px',
+                      background: cash===v ? 'rgba(0,212,255,.18)' : 'rgba(4,14,32,.8)',
+                      border:`1px solid ${cash===v ? 'var(--c)' : 'rgba(0,212,255,.18)'}`,
+                      borderRadius:6, color: cash===v ? 'var(--c)' : 'var(--t3)',
+                      fontFamily:'var(--fm)', fontSize:11, transition:'all .18s',
+                    }}>
+                      ${v.toLocaleString()}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Opponents preview */}
-              <div>
-                <label style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
-                  YOUR OPPONENTS ({selectedAgents.length})
-                </label>
-                {selectedAgents.map(name => {
-                  const agent = AGENTS.find(a => a.name === name);
+              <div style={{ marginBottom:20 }}>
+                <div style={{ fontFamily:'var(--fm)', fontSize:10, color:'var(--t2)', marginBottom:8 }}>OPPONENTS ({sel.size})</div>
+                {[...sel].map(n => {
+                  const a = AGENTS.find(x => x.name === n);
                   return (
-                    <div key={name} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: agent?.color, boxShadow: `0 0 6px ${agent?.color}` }} />
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: agent?.color }}>
-                        {agent?.icon} {name}
-                      </span>
+                    <div key={n} style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+                      <div style={{ width:8, height:8, borderRadius:'50%', background:a.color, boxShadow:`0 0 6px ${a.color}`, flexShrink:0 }} />
+                      <span style={{ fontFamily:'var(--fm)', fontSize:11, color:a.color }}>{a.emoji} {n}</span>
                     </div>
                   );
                 })}
               </div>
 
-              {error && (
-                <div style={{
-                  padding: '10px', borderRadius: '6px',
-                  background: 'rgba(255,0,100,0.1)', border: '1px solid rgba(255,0,100,0.3)',
-                  color: 'var(--neon-pink)', fontSize: '12px', fontFamily: 'var(--font-mono)',
-                }}>
-                  ⚠ {error}
-                </div>
-              )}
-
-              {/* Start button */}
-              <button
-                onClick={handleStart}
-                disabled={loading || selectedAgents.length === 0}
-                className="btn-primary"
-                style={{
-                  padding: '18px',
-                  background: loading
-                    ? 'rgba(0,212,255,0.1)'
-                    : 'linear-gradient(135deg, rgba(0,212,255,0.2), rgba(0,255,136,0.2))',
-                  border: '1px solid var(--neon-cyan)',
-                  borderRadius: '8px',
-                  color: loading ? 'var(--text-muted)' : 'var(--neon-cyan)',
-                  fontSize: '16px',
-                  boxShadow: loading ? 'none' : '0 0 30px rgba(0,212,255,0.3), inset 0 0 30px rgba(0,212,255,0.05)',
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  position: 'relative',
-                  overflow: 'hidden',
-                }}
-              >
-                {loading ? (
-                  <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
-                    <div className="spinner" style={{ width: '18px', height: '18px' }} />
-                    INITIALIZING...
-                  </span>
-                ) : (
-                  '⚔ ENTER THE ARENA'
-                )}
+              <button onClick={handleStart} disabled={loading || sel.size === 0} style={{
+                width:'100%', padding:16,
+                background: loading ? 'rgba(0,212,255,.06)' : 'linear-gradient(135deg,rgba(0,212,255,.2),rgba(0,255,136,.15))',
+                border:`1px solid ${loading ? 'var(--border)' : 'var(--c)'}`,
+                borderRadius:9, fontFamily:'var(--fd)', fontSize:15, fontWeight:700,
+                letterSpacing:'.12em',
+                color: loading ? 'var(--t3)' : 'var(--c)',
+                boxShadow: loading ? 'none' : '0 0 28px rgba(0,212,255,.28)',
+                transition:'all .25s',
+              }}>
+                {loading
+                  ? <span style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10 }}>
+                      <span className="spinner" style={{ width:16, height:16 }} /> INITIALIZING…
+                    </span>
+                  : '⚔ ENTER THE ARENA'}
               </button>
-              
-              <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', textAlign: 'center', lineHeight: 1.6 }}>
-                No login required · Free to play<br/>
-                200 trading ticks · Real-time AI battle
-              </div>
+
+              <p style={{ textAlign:'center', fontFamily:'var(--fm)', fontSize:9, color:'var(--t3)', marginTop:10, lineHeight:1.7 }}>
+                No login · Free to play<br/>200 ticks · Real-time AI simulation
+              </p>
             </div>
 
-            {/* Stats preview */}
-            <div className="glass-panel" style={{
-              borderRadius: '10px', padding: '16px', marginTop: '12px',
-              border: '1px solid rgba(255,215,0,0.2)',
-            }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--neon-gold)', marginBottom: '10px' }}>
-                📊 MARKET CONDITIONS
-              </div>
-              {['AAPL', 'TSLA', 'NVDA', 'MSFT'].map(t => (
-                <div key={t} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-secondary)' }}>{t}</span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: Math.random() > 0.5 ? 'var(--neon-green)' : 'var(--neon-pink)' }}>
-                    {Math.random() > 0.5 ? '▲' : '▼'} {(Math.random() * 3).toFixed(2)}%
-                  </span>
-                </div>
-              ))}
+            <div className="glass" style={{ borderRadius:10, padding:16, border:'1px solid rgba(204,68,255,.2)' }}>
+              <div style={{ fontFamily:'var(--fd)', fontSize:10, letterSpacing:'.15em', color:'var(--pur)', marginBottom:10 }}>🧠 ML STACK</div>
+              {[
+                ['MomentumBot','RSI + MA trend model'],
+                ['ValueBot','Regression valuation'],
+                ['RiskBot','Volatility hedge model'],
+                ['RandomBot','Brownian motion'],
+                ['RLBot','Q-Learning (ε-greedy)'],
+              ].map(([n, s]) => {
+                const a = AGENTS.find(x => x.name === n);
+                return (
+                  <div key={n} style={{ display:'flex', justifyContent:'space-between', marginBottom:5 }}>
+                    <span style={{ fontFamily:'var(--fm)', fontSize:10, color:a.color }}>{a.emoji} {n}</span>
+                    <span style={{ fontFamily:'var(--fm)', fontSize:9, color:'var(--t3)' }}>{s}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
+
         </div>
       </div>
     </div>
   );
-}
-
-function hexToRgb(hex) {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  return result
-    ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}`
-    : '0, 212, 255';
 }
