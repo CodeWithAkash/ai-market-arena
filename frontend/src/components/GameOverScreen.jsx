@@ -21,7 +21,7 @@ export default function GameOverScreen({ gameState, onPlayAgain }) {
   const up=pct>=0;
 
   const msgs={
-    1:{h:'🏆 CHAMPION!',    s:'You defeated every AI agent!',       col:'var(--gold)'},
+    1:{h:'🏆 CHAMPION!!',    s:'You defeated every AI agent!',       col:'var(--gold)'},
     2:{h:'🥈 STRONG FINISH',s:'One bot edged you at the line.',      col:'#BDD8E9'},
     3:{h:'🥉 RESPECTABLE',  s:"You held your own against the bots.", col:'#6EA2B3'},
   };
