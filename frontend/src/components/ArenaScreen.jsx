@@ -44,19 +44,19 @@ function HUD({ tick, maxTicks, pv, start, connected, latency }) {
 }
 
 const BOT_INFO = {
-  MomentumBot:{ emoji:'📈', color:'#7BBDE8',
+  MomentumBot:{ emoji:'📈', color:'#0a334f',
     rules:['BUY when RSI < 40 AND MA5 > MA20 (golden cross)','SELL when RSI > 65 OR momentum turns negative','Skip trade if volatility > 2%'],
     tip:"Watch RSI bounce off 40 — that's its exact trigger zone." },
-  ValueBot:   { emoji:'🔍', color:'#4E8EA2',
+  ValueBot:   { emoji:'🔍', color:'#144f60',
     rules:['BUY when price is >3% below MA20 AND RSI < 35','SELL when price recovers to MA20 (fair value)','Max 30% of portfolio per stock'],
     tip:'It hunts hard dips. RSI < 35 is the confirmation signal.' },
-  RiskBot:    { emoji:'🛡️', color:'#6EA2B3',
+  RiskBot:    { emoji:'🛡️', color:'#307085',
     rules:['HARD stop-loss: sells if any position drops >5%','Profit lock: exits positions at +8% gain','Refuses all trades when volatility > 3%'],
     tip:'Watch how it skips entire volatile ticks — that IS the strategy.' },
-  RandomBot:  { emoji:'🎲', color:'#BDD8E9',
+  RandomBot:  { emoji:'🎲', color:'#447da0',
     rules:['50/50 chance to BUY or SELL any stock each tick','Random 1–10 share size per trade','Zero indicators — pure noise'],
     tip:"The baseline. Can't beat this consistently? Revisit your approach." },
-  RLBot:      { emoji:'🤖', color:'#49769F',
+  RLBot:      { emoji:'🤖', color:'#6b9bc8',
     rules:['Q-table maps (state, action) → expected reward','ε=0.15: explores random actions 15%, exploits best 85%','Reward = portfolio Δvalue per tick (γ=0.95 discount)'],
     tip:'Early game = random. Late game = sharp. Watch it evolve in real time.' },
 };
