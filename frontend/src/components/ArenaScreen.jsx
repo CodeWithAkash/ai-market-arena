@@ -14,7 +14,7 @@ function HUD({ tick, maxTicks, pv, start, connected, latency }) {
   return (
     <div style={{position:'sticky',top:0,zIndex:200,padding:'11px 22px',background:'rgba(0,29,57,.97)',backdropFilter:'blur(24px)',borderBottom:'1px solid rgba(123,189,232,.1)',display:'flex',alignItems:'center',gap:18}}>
       <div style={{fontFamily:'var(--fd)',fontSize:12,fontWeight:900,whiteSpace:'nowrap',letterSpacing:'.06em',background:'linear-gradient(135deg,var(--sky),var(--teal))',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text'}}>
-        AI MARKET ARENA
+        AI MARKET ARENA 
       </div>
       <div style={{display:'flex',alignItems:'center',gap:6}}>
         <div style={{width:7,height:7,borderRadius:'50%',background:connected?'var(--g)':'var(--pink)',boxShadow:`0 0 8px ${connected?'var(--g)':'var(--pink)'}`,animation:'pulse 2s infinite'}}/>
