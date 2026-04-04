@@ -165,7 +165,7 @@ export default function ArenaScreen({ selectedAgents, startingCash=10000, onExit
       <div style={{fontSize:12,color:'var(--t4)',fontWeight:500}}>{connected?'Server connected — waiting for first tick':'Establishing WebSocket connection'}</div>
       {!connected&&(
         <div style={{padding:'11px 22px',background:'rgba(245,200,66,.07)',border:'1px solid rgba(245,200,66,.25)',borderRadius:12,fontSize:12,color:'var(--gold)',textAlign:'center',maxWidth:340,fontWeight:500}}>
-          ⚡ First visit? Render free tier wakes up in 20–30s
+          ⚡ First visit? Render free tier wakes up in 20–30s. Have patience
         </div>
       )}
     </div>
